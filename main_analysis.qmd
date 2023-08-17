@@ -1,0 +1,278 @@
+---
+title: Main Analysis
+author: Jacob Simmering
+format: 
+  html:
+    embed-resources: true
+---
+
+```{r pkg-load}
+library(tidyverse)
+library(survival)
+library(tableone)
+```
+
+# Data Loading and Processing
+```{r}
+model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+```
+
+```{r}
+model_data <- model_data |>
+  mutate(
+    age = first_year - dobyr,
+    female = sex == 1,
+    stratum = as.numeric(as.factor(glue::glue("{first_year}-{last_year}-{dobyr}-{sex}")))
+  ) |>
+  mutate(n_sx = fall + op + muscle,
+         any_sx = fall | op | muscle)
+```
+
+# Data Summary
+First, the data summary by ALS status:
+
+```{r}
+all_vars <- c(
+  "age", "female", 
+  "first_year", "last_year",
+  "rate_outpatient_visits", "intensity_outpatient_visits_dx",
+  "rate_inpatient_stays", "intensity_inpatient_stays_los",
+  "elix_CHF", "elix_Valvular", "elix_PHTN", "elix_PVD", "elix_HTN",
+  "elix_HTNcx", "elix_Paralysis", "elix_NeuroOther", "elix_Pulmonary", "elix_DM",
+  "elix_DMcx", "elix_Hypothyroid", "elix_Renal", "elix_Liver", "elix_PUD", 
+  "elix_HIV", "elix_Lymphoma", "elix_Mets", "elix_Tumor", "elix_Rheumatic", 
+  "elix_Coagulopathy", "elix_Obesity", "elix_WeightLoss", "elix_FluidsLytes", "elix_BloodLoss", 
+  "elix_Anemia", "elix_Alcohol", "elix_Drugs", "elix_Psychoses", "elix_Depression", 
+  "lives_in_msa",
+  "any_sx", "n_sx", 
+  "fall", "muscle", "op")
+factor_vars <- c("n_sx")
+nonnormal_vars <- c("age", "first_year", "last_year", "rate_outpatient_visits", 
+  "intensity_outpatient_visits_dx", "rate_inpatient_stays", 
+  "intensity_inpatient_stays_los")
+
+CreateTableOne(
+  data = model_data,
+  vars = all_vars,
+  factorVars = factor_vars,
+  strata = c("als")
+) |>
+  print(nonnormal = nonnormal_vars, smd = TRUE)
+```
+
+And then by ALS and whether they live in an MSA:
+
+```{r}
+CreateTableOne(
+  data = model_data,
+  vars = all_vars,
+  factorVars = factor_vars,
+  strata = c("als", "lives_in_msa")
+) |>
+  print(nonnormal = nonnormal_vars, smd = TRUE)
+```
+
+# Define Models
+I want to fit five models: 
+
+First, does having any of these codes increase the odds of getting an ALS 
+diagnosis?
+
+```{r}
+any_fml_unadj <- als ~ I(fall | muscle | op) * lives_in_msa + strata(stratum)
+
+any_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   I(fall | muscle | op) * lives_in_msa + strata(stratum)
+```
+
+Second, does the risk increase with each additional code?
+
+```{r}
+number_fml_unadj <- als ~ as.factor(I(fall + muscle + op)) * lives_in_msa + strata(stratum)
+
+number_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   as.factor(I(fall + muscle + op)) * lives_in_msa + strata(stratum)
+```
+
+And for models three to five, does the risk vary between the codes?
+
+```{r}
+fall_fml_unadj <- als ~ fall * lives_in_msa + strata(stratum)
+
+fall_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   fall * lives_in_msa + strata(stratum)
+
+muscle_fml_unadj <- als ~ muscle * lives_in_msa + strata(stratum)
+
+muscle_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   muscle * lives_in_msa + strata(stratum)
+
+op_fml_unadj <- als ~ op * lives_in_msa + strata(stratum)
+
+op_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   op * lives_in_msa + strata(stratum)
+```
+
+Quick note: all of these models omit year, age, and sex. This is because the
+data are matched on age, sex, and enrollment start/end dates. Including the 
+strata accounts for these factors while also properly clustering the errors.
+
+# Estimation
+## Does Having Any Code Increase the Risk?
+Without adjustment:
+
+```{r}
+clogit(
+  any_fml_unadj,
+  model_data
+) |> 
+  summary()
+```
+
+The odds are increased following one or more symptom (OR = 8.95), for those 
+living in MSAs (OR = 1.49), but there is a multiplicative decrease in odds for
+ALS for those with symptoms living in an MSA (OR = 0.79). The odds are still
+increased (OR = $0.79 * 8.95 = 7.05$) but less than for those who do not live
+in MSAs.
+
+After adjustment, the story stays the same:
+
+```{r}
+clogit(
+  any_fml_fulladj,
+  model_data
+) |> 
+  summary()
+```
+
+The odds are remain increased following one or more symptom (OR = 6.40), for 
+those living in MSAs (OR = 1.47), but there is a multiplicative decrease in odds
+for ALS for those with symptoms living in an MSA (OR = 0.79). The odds are still
+increased (OR = $0.79 * 6.40 = 5.06$) but less than for those who do not live
+in MSAs.
+
+## Does the Risk Increase With More Risk Factors?
+Without adjustment:
+
+```{r}
+clogit(
+  number_fml_unadj,
+  model_data
+) |> 
+  summary()
+```
+
+There is a dose-response pattern for more symptoms: OR = 6.05, 19.26, and 30.94. 
+MSA remains a risk factor at 1.40. The interaction between MSA and the symptoms
+does not vary by the number of symptoms (0.80, 0.70, 0.75). 
+
+```{r}
+clogit(
+  number_fml_fulladj,
+  model_data
+) |> 
+  summary()
+```
+
+The dose response pattern is robust to adjustment: 5.09, 13.09, 16.30. The 
+MSA effect is similar to before (OR = 1.48) and again does not vary with the 
+MSA status (0.80, 0.73, 0.87). 
+
+## By Risk Factor
+### Falls and Injuries
+Without adjustment:
+
+```{r}
+clogit(
+  fall_fml_unadj,
+  model_data
+) |> 
+  summary()
+```
+
+With adjustment:
+
+```{r}
+clogit(
+  fall_fml_fulladj,
+  model_data
+) |> 
+  summary()
+```
+
+### Muscle Problems
+Without adjustment:
+
+```{r}
+clogit(
+  muscle_fml_unadj,
+  model_data
+) |> 
+  summary()
+```
+
+With adjustment:
+
+```{r}
+clogit(
+  muscle_fml_fulladj,
+  model_data
+) |> 
+  summary()
+```
+
+### Muscle Problems
+Without adjustment:
+
+```{r}
+clogit(
+  op_fml_unadj,
+  model_data
+) |> 
+  summary()
+```
+
+With adjustment:
+
+```{r}
+clogit(
+  op_fml_fulladj,
+  model_data
+) |> 
+  summary()
+```

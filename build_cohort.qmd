@@ -1,0 +1,330 @@
+---
+title: Build Cohort of People with ALS and Healthy Age, Sex, Time Matched Controls
+author: Jacob Simmering
+format: 
+  html:
+    embed-resources: true
+---
+
+```{r pkg-load}
+library(tidyverse)
+library(parallel)
+```
+
+# Find People with ALS
+People with ALS are people with:
+
+1. A diagnosis of ALS with ICD-9-CM 335.20
+2. A diagnosis of ALS with ICD-10-CM of G12.21
+3. A pharmacy claim with a dispensing of edaravone
+4. A pharmacy claim with a dispensing of riluzole
+
+To add in the extraction, define a function to find outpatient, inpatient,
+and facilities claims with one of the diagnosis codes:
+
+```{r def-extract-by-dx}
+find_outpatient_dx <- function(source, year, icd_9, icd_10) {
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  if (as.numeric(year) <= 14) {
+    events <- tbl(db, glue::glue("outpatient_dx_{source}_{year}")) %>%
+      filter(dx %in% icd_9) %>%
+      select(enrolid, svcdate) %>%
+      mutate(enrolid = as.character(enrolid)) %>%
+      collect() %>%
+      distinct()
+  } else {
+    events9 <- tbl(db, glue::glue("outpatient_dx9_{source}_{year}")) %>%
+      filter(dx %in% icd_9) %>%
+      select(enrolid, svcdate) %>%
+      mutate(enrolid = as.character(enrolid)) %>%
+      collect() %>%
+      distinct()
+    events10 <- tbl(db, glue::glue("outpatient_dx10_{source}_{year}")) %>%
+      filter(dx %in% icd_10) %>%
+      select(enrolid, svcdate) %>%
+      mutate(enrolid = as.character(enrolid)) %>%
+      collect() %>%
+      distinct()
+    events <- rbind(events9, events10)
+  }
+
+  events <- events %>%
+    select(enrolid, date = svcdate)
+  DBI::dbDisconnect(db)
+  return(events)
+}
+
+find_inpatient_dx <- function(source, year, icd_9, icd_10) {
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  if (as.numeric(year) <= 14) {
+    events <- tbl(db, glue::glue("inpatient_dx_{source}_{year}")) %>%
+      filter(dx %in% icd_9) %>%
+      select(caseid) %>%
+      collect()
+  } else {
+    events9 <- tbl(db, glue::glue("inpatient_dx9_{source}_{year}")) %>%
+      filter(dx %in% icd_9) %>%
+      select(caseid) %>%
+      collect()
+    events10 <- tbl(db, glue::glue("inpatient_dx10_{source}_{year}")) %>%
+      filter(dx %in% icd_10) %>%
+      select(caseid) %>%
+      collect()
+    events <- rbind(events9, events10)
+  }
+
+  events <- tbl(db, glue::glue("inpatient_core_{source}_{year}")) %>%
+    filter(caseid %in% local(events$caseid)) %>%
+    select(caseid, enrolid, admdate) %>%
+    mutate(enrolid = as.character(enrolid)) %>%
+    collect() %>%
+    inner_join(events, by = "caseid") |>
+    select(enrolid, date = admdate)
+
+  DBI::dbDisconnect(db)
+  return(events)
+}
+
+find_facility_dx <- function(source, year, icd_9, icd_10) {
+  facility_db <- DBI::dbConnect(RSQLite::SQLite(), 
+                                glue::glue("/Shared/Statepi_Marketscan/databases/Truven/facilities_dbs/facilities_{year}.db"))
+
+  events <- tbl(facility_db, glue::glue("facility_dx_{source}_{year}")) |>
+    filter((dx %in% icd_9 & dx_ver == 9) | (dx %in% icd_10 & dx_ver == 0)) |>
+    select(enrolid, date = svcdate) |>
+    mutate(enrolid = as.character(enrolid)) |>
+    collect() |>
+    distinct()
+
+  DBI::dbDisconnect(facility_db)
+  return(events)
+}
+```
+
+We'll also want to find the RX events:
+
+```{r def-extract-rx}
+find_rx_events <- function(source, year, ndc_num) {
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  events <- tbl(db, glue::glue("rx_core_{source}_{year}")) %>%
+    filter(ndcnum %in% ndc_num) %>%
+    select(enrolid, svcdate) %>%
+    mutate(enrolid = as.character(enrolid)) %>%
+    collect()
+  events <- events %>%
+    select(enrolid, date = svcdate)
+  DBI::dbDisconnect(db)
+  return(events)
+}
+```
+
+We'll want to apply this in parallel, so define a functional version of these
+functions:
+
+```{r def-func-fun}
+find_events <- function(args, icd_9, icd_10, ndc_num) {
+  source <- args[[1]]
+  year <- args[[2]]
+  table <- args[[3]]
+  if (table == "inpatient") {
+    events <- find_inpatient_dx(source, year, icd_9, icd_10)
+  } else if (table == "outpatient") {
+    events <- find_outpatient_dx(source, year, icd_9, icd_10)
+  } else if (table == "facility") {
+    events <- find_facility_dx(source, year, icd_9, icd_10)
+  } else if (table == "rx") {
+    events <- find_rx_events(source, year, ndc_num)
+  }
+  return(events)
+}
+```
+
+We want to pull data from 2001 to 2021. Note that the facilities table does not
+exist for 2001:
+
+```{r def-conditions}
+conditions <- vector("list", length = 2 * 20 * 3 - 2)
+i <- 1
+for (source in c("ccae", "mdcr")) {
+  for (year in stringr::str_pad(1:21, width = 2, pad = "0")) {
+    for (table in c("inpatient", "outpatient", "facility", "rx")) {
+      if (year != "01" | table != "facility") {
+        conditions[[i]] <- c(source, year, table)
+        i <- i + 1
+      }
+    }
+  }
+}
+```
+
+Next, start the cluster and load packages and functions:
+
+```{r start-cluster}
+cluster <- makeCluster(56)
+clusterEvalQ(cluster, library(tidyverse))
+clusterExport(cluster, c("find_inpatient_dx", "find_outpatient_dx", 
+                         "find_facility_dx", "find_rx_events"))
+```
+
+Define the desired values of `icd_9`, `icd_10`, and `ndc_num`:
+
+```{r def-icd-ndc}
+icd_9 <- c("33520")
+icd_10 <- c("G1221")
+
+redbook <- read_csv("/Shared/Statepi_Marketscan/databases/Truven/redbook.csv")
+
+ndc_num <- redbook |>
+  filter(
+    stringr::str_detect(tolower(GENNME), "edaravone") | stringr::str_detect(tolower(GENNME), "riluzole")
+  )
+
+ndc_num <- ndc_num$NDCNUM
+```
+
+```{r cluster-apply}
+als_events <- parLapplyLB(cluster,
+                          conditions,
+                          find_events,
+                          icd_9 = icd_9, icd_10 = icd_10, ndc_num = ndc_num)
+ ```
+
+We are done with the cluster and we release those resources:
+
+```{r cluster-stop}
+stopCluster(cluster)
+```
+
+Reduce the `als_events` table to the first observed date:
+
+```{r find-first-date}
+first_als_date <- als_events %>%
+  enframe() %>%
+  filter(purrr::map_int(value, nrow) > 0) %>%
+  unnest(cols = "value") %>%
+  group_by(enrolid) %>%
+  summarize(als_date = min(date))
+```
+
+Which we then save for later use.
+
+```{r save}
+write_rds(first_als_date, "/Shared/lss_jsimmeri/als/first_als_date.rds")
+```
+
+# Find non-ALS Matches
+Connect to the enrollment database to find enrollment summaries for everyone
+in Truven:
+
+```{r connect-enrollment-db}
+enrollment_db <- DBI::dbConnect(
+  RSQLite::SQLite(), 
+  "/Shared/Statepi_Marketscan/databases/Truven/enrollment_dbs/all_enroll_01_21q4.db")
+```
+
+And then pull the enrollment summaries for everyone in Truven:
+
+```{r}
+enrollments <- tbl(enrollment_db, "all_enrollees") |>
+  collect()
+```
+
+Pull out the cases:
+
+```{r}
+als_enrollments <- enrollments |>
+  mutate(enrolid = as.character(enrolid)) |>
+  filter(enrolid %in% first_als_date$enrolid)
+```
+
+For cases, substitute in the ALS diagnosis year for the last observed year and
+also remove anyone with less than a year of lookback:
+
+```{r}
+als_enrollments <- als_enrollments |>
+  select(-last_year) |>
+  inner_join(
+    first_als_date |>
+      mutate(last_year = year(as_date(als_date))),
+    by = "enrolid"
+  ) |>
+  filter(first_date <= (als_date - 365)) |>
+  select(enrolid, dobyr, sex, first_year, last_year)
+``` 
+
+And controls:
+
+```{r}
+control_enrollments <- enrollments |>
+  mutate(enrolid = as.character(enrolid)) |>
+  filter(!(enrolid %in% first_als_date$enrolid))
+```
+
+Next, we want to match 5 controls to each case based on
+
+1. Age
+2. Sex
+3. Enrollment start year
+4. Enrollment end year
+
+To do this, first group the ALS data and get the number of counts per stratum:
+
+```{r}
+n_als <- als_enrollments |>
+  group_by(dobyr, sex, first_year, last_year) |>
+  summarize(
+    n_als = n(),
+    .groups = "drop"
+  )
+```
+
+And then join with the `control_enrollments` tibble and sample `5 * n_als`:
+
+```{r}
+set.seed(4287452)
+control_sample <- control_enrollments |>
+  group_by(dobyr, sex, first_year, last_year) |>
+  nest() |>
+  ungroup() |>
+  inner_join(n_als, by = c("dobyr", "sex", "first_year", "last_year")) |>
+  mutate(
+    n_control = map_int(data, nrow),
+    n_to_sample = case_when(
+      n_als * 5 < n_control ~ n_als * 5,
+      n_als > n_control ~ n_control,
+      n_als < n_control ~ n_als
+    )
+  ) |>
+  mutate(sample = map2(data, n_to_sample, sample_n)) |>
+  select(dobyr, sex, first_year, last_year, starts_with("n"), sample)
+```
+
+And then expand that back out:
+
+```{r}
+control_sample <- control_sample |>
+  unnest(sample) |>
+  select(enrolid, dobyr, sex, first_year, last_year)
+```
+
+And then save the full cohort:
+
+```{r}
+cohort <- bind_rows(
+  als_enrollments |> 
+    mutate(als = TRUE),
+  control_sample |>
+    mutate(als = FALSE)
+)
+
+write_rds(cohort, "/Shared/lss_jsimmeri/als/cohort.rds")
+```
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```

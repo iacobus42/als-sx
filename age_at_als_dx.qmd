@@ -1,0 +1,63 @@
+---
+title: Age at First Diagnosis
+author: Jacob Simmering
+format: 
+  html:
+    embed-resources: true
+---
+
+
+```{r pkg-load}
+library(tidyverse)
+library(survival)
+```
+
+Living in an MSA seeks to be consistently associated with lower negative effects
+of having a diagnosis for one of the ALS risk factors. One possible cause
+of this may be people living in MSAs being diagnosed with ALS earlier on in
+their disease course. One way to look at this would be to check the age at 
+first diagnosis of ALS. 
+
+```{r}
+model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+
+model_data <- model_data |>
+  mutate(
+    age = first_year - dobyr,
+    female = sex == 1,
+    stratum = as.numeric(as.factor(glue::glue("{first_year}-{last_year}-{dobyr}-{sex}")))
+  ) |>
+  mutate(n_sx = fall + op + muscle,
+         any_sx = fall | op | muscle)
+```
+
+Living in an MSA is associated with an younger age at diagnosis:
+
+```{r}
+survfit(
+  Surv(age, als) ~ lives_in_msa,
+  data = model_data
+)
+```
+
+Residents of MSAs are, on median, 85 years old when diagnosed compared to 88 
+among their peers that are non-MSA resident. 
+
+The median age of diagnosis decreases with the number of symptoms:
+
+```{r}
+survfit(
+  Surv(age, als) ~ n_sx,
+  data = model_data
+)
+```
+
+The decrease is present in both residents and non-residents but the residents
+consistently have younger ages (although the difference may be n/s at times).
+
+```{r}
+survfit(
+  Surv(age, als) ~ n_sx + lives_in_msa,
+  data = model_data
+)
+```

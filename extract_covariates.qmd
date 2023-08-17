@@ -1,0 +1,599 @@
+---
+title: Pull Covariates for Regression Adjustment
+author: Jacob Simmering
+format: 
+  html:
+    embed-resources: true
+---
+
+```{r pkg-load}
+library(tidyverse)
+library(parallel)
+library(icd)
+```
+
+# Data Load
+We want to find diagnostic information for our cohort. Start by loading the 
+cohort data to use to filter the databases:
+
+```{r}
+cohort <- read_rds("/Shared/lss_jsimmeri/als/cohort.rds")
+als_dates <- read_rds("/Shared/lss_jsimmeri/als/first_als_date.rds")
+```
+
+# Find All Diagnostic Codes
+We want to find and return all diagnostic codes for the 110,618 people in our
+dataset from outpatient, inpatient, and facilities tables. Define functions to
+do the extraction:
+
+```{r def-extract-dx-by-enrolid}
+find_outpatient_dx_by_enrolid <- function(source, year, required_enrolid) {
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  if (as.numeric(year) <= 14) {
+    outpatient <- tbl(db, glue::glue("outpatient_dx_{source}_{year}")) %>%
+      filter(enrolid %in% required_enrolid) %>%
+      select(enrolid, svcdate, dx) %>%
+      mutate(icd_version = 9,
+             enrolid = as.character(enrolid)) %>%
+      collect()
+  } else {
+    outpatient_9 <- tbl(db, glue::glue("outpatient_dx9_{source}_{year}")) %>%
+      filter(enrolid %in% required_enrolid) %>%
+      select(enrolid, svcdate, dx) %>%
+      mutate(icd_version = 9,
+             enrolid = as.character(enrolid)) %>%
+      collect()
+    outpatient_10 <- tbl(db, glue::glue("outpatient_dx10_{source}_{year}")) %>%
+      filter(enrolid %in% required_enrolid) %>%
+      select(enrolid, svcdate, dx) %>%
+      mutate(icd_version = 10,
+             enrolid = as.character(enrolid)) %>%
+      collect()
+    if (nrow(outpatient_9) > 0 & nrow(outpatient_10) > 0) {
+      outpatient <- bind_rows(outpatient_9, outpatient_10)
+    } else if (nrow(outpatient_10) > 0) {
+      outpatient <- outpatient_10
+    } else {
+      outpatient <- outpatient_9
+    }
+  }
+
+  outpatient <- outpatient %>%
+    distinct()
+  DBI::dbDisconnect(db)
+  return(outpatient)
+}
+
+find_inpatient_dx_by_enrolid <- function(source, year, required_enrolid) {
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  inpatient_core <- tbl(db, glue::glue("inpatient_core_{source}_{year}")) %>%
+    filter(enrolid %in% required_enrolid) %>%
+    mutate(enrolid = as.character(enrolid)) %>%
+    select(caseid, enrolid, admdate, los) %>%
+    collect() %>%
+    mutate(source = source, year = year)
+  if (as.numeric(year) <= 14) {
+    inpatient_dx <- tbl(db, glue::glue("inpatient_dx_{source}_{year}")) %>%
+      filter(caseid %in% local(inpatient_core$caseid)) %>%
+      select(caseid, dx) %>%
+      collect() %>%
+      mutate(icd_version = 9)
+  } else {
+    inpatient_9 <- tbl(db, glue::glue("inpatient_dx9_{source}_{year}")) %>%
+      filter(caseid %in% local(inpatient_core$caseid)) %>%
+      select(caseid, dx) %>%
+      collect() %>%
+      mutate(icd_version = 9)
+    inpatient_10 <- tbl(db, glue::glue("inpatient_dx10_{source}_{year}")) %>%
+      filter(caseid %in% local(inpatient_core$caseid)) %>%
+      select(caseid, dx) %>%
+      collect() %>%
+      mutate(icd_version = 10)
+    if (nrow(inpatient_9) > 0 & nrow(inpatient_10) > 0) {
+      inpatient_dx <- bind_rows(inpatient_9, inpatient_10)
+    } else if (nrow(inpatient_10) > 0) {
+      inpatient_dx <- inpatient_10
+    } else {
+      inpatient_dx <- inpatient_9
+    }
+  }
+  
+  inpatient_dx <- inpatient_dx %>%
+    inner_join(inpatient_core, by = "caseid") %>%
+    select(caseid, enrolid, admdate, icd_version, dx)
+
+  DBI::dbDisconnect(db)
+  return(inpatient_dx)
+}
+
+find_facility_dx_by_enrolid <- function(source, year, required_enrolid) {
+  facility_db <- DBI::dbConnect(RSQLite::SQLite(), 
+                                glue::glue("/Shared/Statepi_Marketscan/databases/Truven/facilities_dbs/facilities_{year}.db"))
+
+  events <- tbl(facility_db, glue::glue("facility_dx_{source}_{year}")) |>
+    filter(enrolid %in% required_enrolid) |>
+    select(enrolid, date = svcdate, dx, icd_version = dx_ver) |>
+    mutate(enrolid = as.character(enrolid)) |>
+    collect() |>
+    distinct() |>
+    mutate(icd_version = ifelse(icd_version == 0, "10", "9"))
+
+  return(events)
+}
+```
+
+Which, as in `build_cohort.qmd` needs a wrapper for functional application:
+
+```{r def-find-dx}
+find_events <- function(args, required_enrolid) {
+  source <- args[[1]]
+  year <- args[[2]]
+  table <- args[[3]]
+
+  if (table == "inpatient") {
+    events <- find_inpatient_dx_by_enrolid(source, year, required_enrolid)
+  } else if (table == "outpatient") {
+    events <- find_outpatient_dx_by_enrolid(source, year, required_enrolid)
+  } else if (table == "facility") {
+    events <- find_facility_dx_by_enrolid(source, year, required_enrolid)
+  }
+
+  return(events)
+}
+```
+
+We want to pull data from 2001 to 2021. Note that the facilities table does not
+exist for 2001:
+
+```{r def-conditions}
+conditions <- vector("list", length = 2 * 20 * 3 - 2)
+i <- 1
+for (source in c("ccae", "mdcr")) {
+  for (year in stringr::str_pad(1:21, width = 2, pad = "0")) {
+    for (table in c("inpatient", "outpatient", "facility")) {
+      if (year != "01" | table != "facility") {
+        conditions[[i]] <- c(source, year, table)
+        i <- i + 1
+      }
+    }
+  }
+}
+```
+
+Next, start the cluster and load packages and functions:
+
+```{r start-cluster}
+cluster <- makeCluster(56)
+clusterEvalQ(cluster, library(tidyverse))
+clusterExport(cluster, c("find_inpatient_dx_by_enrolid",
+                         "find_outpatient_dx_by_enrolid", 
+                         "find_facility_dx_by_enrolid"))
+```
+And pull back the diagnoses:
+
+```{r find-all-diagnoses}
+all_dx <- parLapplyLB(cluster,
+                      conditions,
+                      find_events,
+                      required_enrolid = cohort$enrolid)
+
+# write_rds(all_dx, "/Shared/lss_jsimmeri/als/all_dx.rds")
+# all_dx <- read_rds("/Shared/lss_jsimmeri/als/all_dx.rds")
+```
+
+Then clean and unnest:
+
+```{r}
+clean_inpatient <- function(data) {
+  data <- data |>
+    select(enrolid, date = admdate, icd_version, dx)
+  return(data)
+}
+
+clean_outpatient <- function(data) {
+  data <- data |>
+    select(enrolid, date = svcdate, icd_version, dx)
+  return(data)
+}
+
+clean_switch <- function(data, setting) {
+  if (setting == "inpatient") {
+    data <- clean_inpatient(data)
+  }
+  if (setting == "outpatient") {
+    data <- clean_outpatient(data)
+  }
+  if (setting == "facility") {
+    data <- data |>
+      mutate(icd_version = as.numeric(icd_version))
+  }
+  return(data)
+}
+
+dx_tbl <- conditions |>
+  lapply(function(x) {as_tibble(x); names(x) <- c("source", "year", "setting"); return(x)}) |>
+  bind_rows() |>
+  mutate(
+    data = all_dx
+  ) |>
+  mutate(
+    data = map2(data, setting, clean_switch)
+  ) |>
+  unnest(cols = data)
+```
+
+And then reduce to diagnoses that occurred before the ALS diagnosis date for 
+cases and keep all for controls:
+
+```{r}
+cohort <- left_join(cohort, als_dates, by = c("enrolid"))
+
+dx_tbl <- dx_tbl |>
+  inner_join(cohort, by = "enrolid") |>
+  filter(is.na(als_date) | als_date > date)
+```
+
+Then, reduce to unique DX by setting and date:
+
+```{r}
+unique_by_setting_date <- dx_tbl |>
+  select(enrolid, setting, date, icd_version, dx) |>
+  distinct()
+```
+
+And also the set of unique diagnoses recorded during the period:
+
+```{r}
+unique_by_enrolid <- dx_tbl |>
+  select(enrolid, icd_version, dx) |>
+  distinct()
+```
+
+# Calculate Comorbidity Flags
+
+```{r}
+dx_9 <- unique_by_enrolid |>
+  filter(icd_version == 9)
+dx_10 <- unique_by_enrolid |>
+  filter(icd_version == 10)
+
+elix_9 <- comorbid(dx_9, 
+                   icd9_map_ahrq,
+                   icd_name = "dx",
+                   visit_name = "enrolid",
+                   return_df = TRUE) |>
+                   as_tibble() 
+
+elix_10 <- comorbid(dx_10, 
+                   icd10_map_ahrq,
+                   icd_name = "dx",
+                   visit_name = "enrolid",
+                   return_df = TRUE) |>
+                   as_tibble() 
+
+elix <- bind_rows(elix_9, elix_10) |>
+  pivot_longer(-enrolid, names_to = "cm", values_to = "flag") |>
+  filter(flag == TRUE) |>
+  distinct() |>
+  mutate(cm = glue::glue("elix_{cm}")) |>
+  pivot_wider(names_from = "cm", values_from = "flag", values_fill = FALSE)
+```
+
+# Find the Volume of Care Consumed
+For the outpatient data, we reduce this to patient-days with >= 1 diagnosis 
+since a single visit can generate many claims. So count those:
+
+```{r}
+outpatient_volume <- unique_by_setting_date |>
+  filter(setting == "outpatient") |>
+  group_by(enrolid, date) |>
+  summarize(
+    n_dx = n(),
+    .groups = "drop"
+  ) |>
+  group_by(enrolid) |>
+  summarize(
+    n_outpatient_visits = n(),
+    mean_dx_per_outpatient_visit = mean(n_dx)
+  )
+```
+
+For the inpatient volume (number of stays, LOS) we need to pull the data again:
+
+```{r}
+find_inpatient_volume_by_enrolid <- function(args, required_enrolid) {
+  source <- args[[1]]
+  year <- args[[2]]
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  inpatient_core <- tbl(db, glue::glue("inpatient_core_{source}_{year}")) %>%
+    filter(enrolid %in% required_enrolid) %>%
+    mutate(enrolid = as.character(enrolid)) %>%
+    select(caseid, enrolid, date = admdate, los) %>%
+    collect() %>%
+    mutate(source = source, year = year)
+
+  DBI::dbDisconnect(db)
+  return(inpatient_core)
+}
+```
+
+Which we obviously only need to apply to the inpatient tables:
+
+```{r def-conditions}
+conditions_inpatient_only <- vector("list", length = 2 * 20)
+i <- 1
+for (source in c("ccae", "mdcr")) {
+  for (year in stringr::str_pad(1:21, width = 2, pad = "0")) {
+    conditions_inpatient_only[[i]] <- c(source, year)
+    i <- i + 1
+  }
+}
+```
+
+And pull back the volume using the cluster `cluster`:
+
+```{r find-all-diagnoses}
+inpatient_volume <- parLapplyLB(cluster,
+                                conditions_inpatient_only,
+                                find_inpatient_volume_by_enrolid,
+                                required_enrolid = cohort$enrolid)
+
+inpatient_volume <- bind_rows(inpatient_volume)
+```
+
+Reduce and summarize:
+
+```{r}
+inpatient_volume <- inpatient_volume |>
+  inner_join(cohort, by = "enrolid") |>
+  filter(is.na(als_date) | als_date > date) |>
+  group_by(enrolid) |>
+  summarize(
+    n_hospital_admissions = n(),
+    n_hospital_days = sum(los)
+  )
+```
+
+# Find Exposures
+## Falls or Injuries
+Falls are the ICD-9-CM and ICD-10-CM codes:
+
+```{r}
+falls_9 <- c("7197", "7812", "7813", "920", "95909", "9599", "E8889", "V1588")
+falls_10 <- c("R26", "R262", "R260", "R261", "R2681", "R2689", "R269", "R270", 
+              "R278", "R279", "S0003XA", "S0033XA", "S00431A", "S00432A", 
+              "S00439A", "S00531A", "S00532A", "S0083XA", "S0093XA", "S100XXA", 
+              "S1083XA", "S1093XA", "S0992XA", "S0993XA", "S168XXA", "S169XXA", 
+              "S1980XA", "S1981XA", "S1982XA", "S1983XA", "S1984XA", "S1985XA", 
+              "S1989XA", "S199XXA", "T148", "T1490", "W19XXXA", "W19XXXD")
+
+bind_rows(
+  explain_table(falls_9) |>
+    select(code, long_desc),
+  explain_table(falls_10) |>
+    select(code, long_desc)
+  ) |> 
+  knitr::kable()
+```
+
+```{r}
+falls <- unique_by_enrolid |>
+  filter(dx %in% c(falls_9, falls_10)) |>
+  mutate(fall = TRUE) |>
+  select(enrolid, fall) |>
+  distinct()
+```
+
+## Muscle Symptoms
+Muscle symptoms are coded with:
+
+```{r}
+muscle_9 <- c("72885", "72887", "7282")
+muscle_10 <- c("M6283","M62838", "M62831", "M625", "M6250", "M6251", "M62511", 
+               "M62512", "M62519", "M6252", "M62521", "M62522", "M62529", 
+               "M6253", "M62531", "M62532", "M52539", "M6254", "M62541", 
+               "M62542", "M62549", "M6255", "M62551", "M62552", "M62559", 
+               "M6256", "M62561", "M62562", "M62569","M6257", "M62571", 
+               "M62572", "M62579", "M6258", "M6259", 
+               "M6251", "M6252", "M6259", "M6281", "M6283", "M62830", 
+               "M62831", "M62838")
+bind_rows(
+  explain_table(muscle_9) |>
+    select(code, long_desc),
+  explain_table(muscle_10) |>
+    select(code, long_desc)
+  ) |> 
+  knitr::kable()
+```
+
+```{r}
+muscle <- unique_by_enrolid |>
+  filter(dx %in% c(muscle_9, muscle_10)) |>
+  mutate(muscle = TRUE) |>
+  select(enrolid, muscle) |>
+  distinct()
+```
+
+## Oropharyngeal Problems
+Oropharyngeal problems are coded with:
+
+```{r}
+speech_9 <- c("32723", "78053", "78057", "78720", "78459", "V573")
+speech_10 <- c("G4733", "G4730", "R130", "R1310", "R4702", "R4781", "R4789", 
+               "R479")
+
+bind_rows(
+  explain_table(speech_9) |>
+    select(code, long_desc),
+  explain_table(speech_10) |>
+    select(code, long_desc)
+  ) |> 
+  knitr::kable()
+```
+
+```{r}
+op <- unique_by_enrolid |>
+  filter(dx %in% c(speech_9, speech_10)) |>
+  mutate(op = TRUE) |>
+  select(enrolid, op) |>
+  distinct()
+```
+
+# Find Urban/Rural
+Urban is defined as having ever lived in an MSA. Query the detailed enrollment
+tables to find out:
+
+```{r}
+check_msa <- function(args, required_enrolid) {
+  source <- args[[1]]
+  year <- args[[2]]
+  db <- DBI::dbConnect(RSQLite::SQLite(),
+                       glue::glue("/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db"))
+  enrollment_msa <- tbl(db, glue::glue("enrollment_detail_{source}_{year}")) |>
+    filter(enrolid %in% required_enrolid) |>
+    select(enrolid, msa) |>
+    mutate(enrolid = as.character(enrolid)) |>
+    collect()
+  enrollment_msa <- enrollment_msa |>
+    mutate(lives_in_msa = !is.na(msa) & msa != 0 & msa != "") |>
+    group_by(enrolid) |> 
+    summarize(lives_in_msa = any(lives_in_msa))
+  return(enrollment_msa)
+}
+```
+
+And then apply:
+
+```{r}
+resides_in_msa <- parLapplyLB(cluster,
+                              conditions_inpatient_only,
+                              check_msa,
+                              required_enrolid = cohort$enrolid)
+```
+
+And then aggregate across years:
+
+```{r}
+resides_in_msa <- resides_in_msa |> 
+  bind_rows() |>
+  group_by(enrolid) |>
+  summarize(
+    lives_in_msa = any(lives_in_msa)
+  )
+```
+
+# Assemble Model Data Set
+In order to normalize volume, we need enrollment duration in days:
+
+```{r}
+enrollment_db <- DBI::dbConnect(
+  RSQLite::SQLite(), 
+  "/Shared/Statepi_Marketscan/databases/Truven/enrollment_dbs/all_enroll_01_21q4.db")
+
+enrollments <- tbl(enrollment_db, "all_enrollees") |>
+  filter(enrolid %in% local(cohort$enrolid)) |>
+  collect()
+```
+
+For people who have ALS, replace last date and calculate enrollment duration:
+
+```{r}
+enrollment_duration <- enrollments |>
+  mutate(enrolid = as.character(enrolid)) |>
+  inner_join(cohort |> select(enrolid, als_date), by = "enrolid") |>
+  mutate(
+    end_date = ifelse(is.na(als_date), last_date,
+                      ifelse(als_date < last_date, als_date, last_date))
+  ) |>
+  mutate(duration = end_date - first_date) |>
+  select(enrolid, duration)
+```
+
+Then make normalized volume:
+
+```{r}
+volume <- bind_rows(
+  outpatient_volume |>
+    inner_join(enrollment_duration, by = "enrolid") |>
+    mutate(
+      rate_outpatient_visits = n_outpatient_visits / duration * 365,
+      intensity_outpatient_visits_dx = mean_dx_per_outpatient_visit
+    ) |>
+    select(enrolid, rate_outpatient_visits, intensity_outpatient_visits_dx),
+  inpatient_volume |>
+    inner_join(enrollment_duration, by = "enrolid") |>
+    mutate(
+      rate_inpatient_stays = n_hospital_admissions / duration * 365,
+      intensity_inpatient_stays_los = n_hospital_days / n_hospital_admissions
+    ) |>
+    select(enrolid, rate_inpatient_stays, intensity_inpatient_stays_los)
+)
+```
+
+And then add to the cohort data:
+
+```{r}
+model_data <- cohort |>
+  select(enrolid, als, first_year, last_year, dobyr, sex) |>
+  left_join(volume, by = "enrolid") |>
+  mutate(
+    rate_outpatient_visits = replace_na(rate_outpatient_visits, 0),
+    intensity_outpatient_visits_dx = replace_na(intensity_outpatient_visits_dx, 0),
+    rate_inpatient_stays = replace_na(rate_inpatient_stays, 0),
+    intensity_inpatient_stays_los = replace_na(intensity_inpatient_stays_los, 0)
+  )
+```
+
+And the Elixhauser flags:
+
+```{r}
+model_data <- model_data |>
+  left_join(elix, by = "enrolid") |>
+  mutate(
+    across(
+      starts_with("elix"),
+      \(x) replace_na(x, FALSE)
+    )
+  )
+```
+
+Add the exposures:
+
+```{r}
+model_data <- model_data |>
+  left_join(
+    falls,
+    by = "enrolid"
+  ) |>
+  left_join(
+    muscle,
+    by = "enrolid"
+  ) |>
+  left_join(
+    op,
+    by = "enrolid"
+  ) |>
+  inner_join(
+    resides_in_msa,
+    by = "enrolid"
+  ) |>
+  mutate(
+    fall = replace_na(fall, FALSE),
+    muscle = replace_na(muscle, FALSE),
+    op = replace_na(op, FALSE)
+  )
+```
+
+# Save Model Data
+
+```{r}
+write_rds(model_data, "/Shared/lss_jsimmeri/als/model_data.rds")
+```
+
+# Session Information
+```{r}
+sessionInfo()
+```
