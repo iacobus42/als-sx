@@ -322,7 +322,7 @@ find_inpatient_volume_by_enrolid <- function(args, required_enrolid) {
 
 Which we obviously only need to apply to the inpatient tables:
 
-```{r def-conditions}
+```{r def-conditions-inpatient-only}
 conditions_inpatient_only <- vector("list", length = 2 * 20)
 i <- 1
 for (source in c("ccae", "mdcr")) {
