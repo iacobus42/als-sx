@@ -515,7 +515,7 @@ enrollment_duration <- enrollments |>
 Then make normalized volume:
 
 ```{r}
-volume <- bind_rows(
+volume <- full_join(
   outpatient_volume |>
     inner_join(enrollment_duration, by = "enrolid") |>
     mutate(
@@ -529,7 +529,8 @@ volume <- bind_rows(
       rate_inpatient_stays = n_hospital_admissions / duration * 365,
       intensity_inpatient_stays_los = n_hospital_days / n_hospital_admissions
     ) |>
-    select(enrolid, rate_inpatient_stays, intensity_inpatient_stays_los)
+    select(enrolid, rate_inpatient_stays, intensity_inpatient_stays_los),
+  by = "enrolid"
 )
 ```
 
