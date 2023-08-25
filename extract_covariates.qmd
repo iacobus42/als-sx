@@ -148,7 +148,7 @@ We want to pull data from 2001 to 2021. Note that the facilities table does not
 exist for 2001:
 
 ```{r def-conditions}
-conditions <- vector("list", length = 2 * 20 * 3 - 2)
+conditions <- vector("list", length = 2 * 21 * 3 - 2)
 i <- 1
 for (source in c("ccae", "mdcr")) {
   for (year in stringr::str_pad(1:21, width = 2, pad = "0")) {

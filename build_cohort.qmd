@@ -146,7 +146,7 @@ We want to pull data from 2001 to 2021. Note that the facilities table does not
 exist for 2001:
 
 ```{r def-conditions}
-conditions <- vector("list", length = 2 * 20 * 3 - 2)
+conditions <- vector("list", length = 2 * 21 * 3 - 2)
 i <- 1
 for (source in c("ccae", "mdcr")) {
   for (year in stringr::str_pad(1:21, width = 2, pad = "0")) {
@@ -190,7 +190,7 @@ als_events <- parLapplyLB(cluster,
                           conditions,
                           find_events,
                           icd_9 = icd_9, icd_10 = icd_10, ndc_num = ndc_num)
- ```
+```
 
 We are done with the cluster and we release those resources:
 
@@ -201,11 +201,11 @@ stopCluster(cluster)
 Reduce the `als_events` table to the first observed date:
 
 ```{r find-first-date}
-first_als_date <- als_events %>%
-  enframe() %>%
-  filter(purrr::map_int(value, nrow) > 0) %>%
-  unnest(cols = "value") %>%
-  group_by(enrolid) %>%
+first_als_date <- als_events |>
+  enframe() |>
+  filter(purrr::map_int(value, nrow) > 0) |>
+  unnest(cols = "value") |>
+  group_by(enrolid) |>
   summarize(als_date = min(date))
 ```
 
