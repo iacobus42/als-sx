@@ -335,7 +335,7 @@ for (source in c("ccae", "mdcr")) {
 
 And pull back the volume using the cluster `cluster`:
 
-```{r find-all-diagnoses}
+```{r find-inpatient-volume}
 inpatient_volume <- parLapplyLB(cluster,
                                 conditions_inpatient_only,
                                 find_inpatient_volume_by_enrolid,
