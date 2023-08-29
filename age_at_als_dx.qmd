@@ -43,6 +43,13 @@ survfit(
 Residents of MSAs are, on median, 85 years old when diagnosed compared to 88 
 among their peers that are non-MSA resident. 
 
+```{r}
+survfit(
+  Surv(age, als) ~ any_sx,
+  data = model_data
+)
+```
+
 The median age of diagnosis decreases with the number of symptoms:
 
 ```{r}
@@ -60,4 +67,31 @@ survfit(
   Surv(age, als) ~ n_sx + lives_in_msa,
   data = model_data
 )
+```
+
+Testing whether these are multiplicative/addictive or have overlap:
+
+```{r}
+coxph(
+  Surv(age, als) ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses +
+                   elix_Depression + as.factor(n_sx) * lives_in_msa + strata(stratum),
+  data = model_data,
+  robust = TRUE,
+  cluster = stratum
+) |>
+  broom::tidy() |>
+  mutate(
+    hr = exp(estimate),
+    lb = exp(estimate - 1.96 * robust.se),
+    ub = exp(estimate + 1.96 * robust.se)
+  ) |>
+  select(term, hr, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
