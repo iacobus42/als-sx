@@ -183,7 +183,8 @@ After adjustment, the story stays the same:
 clogit(
   any_fml_fulladj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -206,7 +207,8 @@ Without adjustment:
 clogit(
   number_fml_unadj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -224,7 +226,8 @@ does not vary by the number of symptoms (0.80, 0.70, 0.75).
 clogit(
   number_fml_fulladj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -246,7 +249,8 @@ Without adjustment:
 clogit(
   fall_fml_unadj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -262,7 +266,8 @@ With adjustment:
 clogit(
   fall_fml_fulladj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -279,7 +284,8 @@ Without adjustment:
 clogit(
   muscle_fml_unadj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -295,7 +301,8 @@ With adjustment:
 clogit(
   muscle_fml_fulladj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -312,7 +319,8 @@ Without adjustment:
 clogit(
   op_fml_unadj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
@@ -328,7 +336,8 @@ With adjustment:
 clogit(
   op_fml_fulladj,
   model_data
-) |>
+) |> 
+  broom::tidy() |>
   mutate(
     or = exp(estimate),
     lb = exp(estimate - 1.96 * std.error),
