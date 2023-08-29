@@ -161,7 +161,14 @@ clogit(
   any_fml_unadj,
   model_data
 ) |> 
-  summary()
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 The odds are increased following one or more symptom (OR = 8.95), for those 
@@ -176,8 +183,14 @@ After adjustment, the story stays the same:
 clogit(
   any_fml_fulladj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 The odds are remain increased following one or more symptom (OR = 6.40), for 
@@ -193,8 +206,14 @@ Without adjustment:
 clogit(
   number_fml_unadj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 There is a dose-response pattern for more symptoms: OR = 6.05, 19.26, and 30.94. 
@@ -205,8 +224,14 @@ does not vary by the number of symptoms (0.80, 0.70, 0.75).
 clogit(
   number_fml_fulladj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 The dose response pattern is robust to adjustment: 5.09, 13.09, 16.30. The 
@@ -221,8 +246,14 @@ Without adjustment:
 clogit(
   fall_fml_unadj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 With adjustment:
@@ -231,8 +262,14 @@ With adjustment:
 clogit(
   fall_fml_fulladj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 ### Muscle Problems
@@ -242,8 +279,14 @@ Without adjustment:
 clogit(
   muscle_fml_unadj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 With adjustment:
@@ -252,8 +295,14 @@ With adjustment:
 clogit(
   muscle_fml_fulladj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 ### Muscle Problems
@@ -263,8 +312,14 @@ Without adjustment:
 clogit(
   op_fml_unadj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
 
 With adjustment:
@@ -273,6 +328,12 @@ With adjustment:
 clogit(
   op_fml_fulladj,
   model_data
-) |> 
-  summary()
+) |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
 ```
