@@ -2673,12 +2673,25 @@ lives_in_msa=TRUE  97971  16726     85      84      85</code></pre>
 </div>
 </div>
 <p>Residents of MSAs are, on median, 85 years old when diagnosed compared to 88 among their peers that are non-MSA resident.</p>
-<p>The median age of diagnosis decreases with the number of symptoms:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">survfit</span>(</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> n_sx,</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> any_sx,</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> model_data</span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Call: survfit(formula = Surv(age, als) ~ any_sx, data = model_data)
+
+                 n events median 0.95LCL 0.95UCL
+any_sx=FALSE 77476   6392     96      93      NA
+any_sx=TRUE  37876  12834     76      76      76</code></pre>
+</div>
+</div>
+<p>The median age of diagnosis decreases with the number of symptoms:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">survfit</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> n_sx,</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> model_data</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Call: survfit(formula = Surv(age, als) ~ n_sx, data = model_data)
 
@@ -2691,10 +2704,10 @@ n_sx=3  3248   1681     71      70      72</code></pre>
 </div>
 <p>The decrease is present in both residents and non-residents but the residents consistently have younger ages (although the difference may be n/s at times).</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">survfit</span>(</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> n_sx <span class="sc">+</span> lives_in_msa,</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> model_data</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">survfit</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> n_sx <span class="sc">+</span> lives_in_msa,</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> model_data</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Call: survfit(formula = Surv(age, als) ~ n_sx + lives_in_msa, data = model_data)
 
@@ -2707,6 +2720,291 @@ n_sx=2, lives_in_msa=FALSE  1336    614     71      69      73
 n_sx=2, lives_in_msa=TRUE   8573   3844     72      71      73
 n_sx=3, lives_in_msa=FALSE   405    213     71      65      74
 n_sx=3, lives_in_msa=TRUE   2843   1468     71      70      72</code></pre>
+</div>
+</div>
+<p>Testing whether these are multiplicative/addictive or have overlap:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(age, als) <span class="sc">~</span> rate_outpatient_visits <span class="sc">+</span> intensity_outpatient_visits_dx <span class="sc">+</span> </span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>                   rate_inpatient_stays <span class="sc">+</span> intensity_inpatient_stays_los <span class="sc">+</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                   elix_CHF <span class="sc">+</span> elix_Valvular <span class="sc">+</span> elix_PHTN <span class="sc">+</span> elix_PVD <span class="sc">+</span> elix_HTN <span class="sc">+</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>                   elix_HTNcx <span class="sc">+</span> elix_Paralysis <span class="sc">+</span> elix_NeuroOther <span class="sc">+</span> elix_Pulmonary <span class="sc">+</span> elix_DM <span class="sc">+</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>                   elix_DMcx <span class="sc">+</span> elix_Hypothyroid <span class="sc">+</span> elix_Renal <span class="sc">+</span> elix_Liver <span class="sc">+</span> elix_PUD <span class="sc">+</span> </span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>                   elix_HIV <span class="sc">+</span> elix_Lymphoma <span class="sc">+</span> elix_Mets <span class="sc">+</span> elix_Tumor <span class="sc">+</span> elix_Rheumatic <span class="sc">+</span> </span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>                   elix_Coagulopathy <span class="sc">+</span> elix_Obesity <span class="sc">+</span> elix_WeightLoss <span class="sc">+</span> elix_FluidsLytes <span class="sc">+</span> elix_BloodLoss <span class="sc">+</span> </span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>                   elix_Anemia <span class="sc">+</span> elix_Alcohol <span class="sc">+</span> elix_Drugs <span class="sc">+</span> elix_Psychoses <span class="sc">+</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>                   elix_Depression <span class="sc">+</span> <span class="fu">as.factor</span>(n_sx) <span class="sc">*</span> lives_in_msa <span class="sc">+</span> <span class="fu">strata</span>(stratum),</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> model_data,</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">robust =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">cluster =</span> stratum</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>  broom<span class="sc">::</span><span class="fu">tidy</span>() <span class="sc">|&gt;</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">hr =</span> <span class="fu">exp</span>(estimate),</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">lb =</span> <span class="fu">exp</span>(estimate <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> robust.se),</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">ub =</span> <span class="fu">exp</span>(estimate <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> robust.se)</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(term, hr, lb, ub) <span class="sc">|&gt;</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<table class="table table-sm table-striped">
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: right;">hr</th>
+<th style="text-align: right;">lb</th>
+<th style="text-align: right;">ub</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">rate_outpatient_visits</td>
+<td style="text-align: right;">1.01</td>
+<td style="text-align: right;">1.01</td>
+<td style="text-align: right;">1.01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">intensity_outpatient_visits_dx</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">1.11</td>
+<td style="text-align: right;">1.17</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">rate_inpatient_stays</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.88</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">intensity_inpatient_stays_los</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">1.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_CHFTRUE</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.63</td>
+<td style="text-align: right;">0.72</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_ValvularTRUE</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">0.90</td>
+<td style="text-align: right;">1.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_PHTNTRUE</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">1.03</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_PVDTRUE</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.97</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_HTNTRUE</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">1.01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_HTNcxTRUE</td>
+<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.96</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_ParalysisTRUE</td>
+<td style="text-align: right;">1.72</td>
+<td style="text-align: right;">1.62</td>
+<td style="text-align: right;">1.83</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_NeuroOtherTRUE</td>
+<td style="text-align: right;">3.12</td>
+<td style="text-align: right;">2.99</td>
+<td style="text-align: right;">3.25</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_PulmonaryTRUE</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.99</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_DMTRUE</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.84</td>
+<td style="text-align: right;">0.93</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_DMcxTRUE</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.88</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_HypothyroidTRUE</td>
+<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">1.05</td>
+<td style="text-align: right;">1.14</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_RenalTRUE</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">0.60</td>
+<td style="text-align: right;">0.71</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_LiverTRUE</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">1.02</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_PUDTRUE</td>
+<td style="text-align: right;">1.08</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">1.34</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_HIVTRUE</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">1.38</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_LymphomaTRUE</td>
+<td style="text-align: right;">1.18</td>
+<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">1.33</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_MetsTRUE</td>
+<td style="text-align: right;">0.41</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.47</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_TumorTRUE</td>
+<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.97</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_RheumaticTRUE</td>
+<td style="text-align: right;">1.19</td>
+<td style="text-align: right;">1.12</td>
+<td style="text-align: right;">1.26</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_CoagulopathyTRUE</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.80</td>
+<td style="text-align: right;">0.94</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_ObesityTRUE</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: right;">0.77</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_WeightLossTRUE</td>
+<td style="text-align: right;">1.42</td>
+<td style="text-align: right;">1.34</td>
+<td style="text-align: right;">1.51</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_FluidsLytesTRUE</td>
+<td style="text-align: right;">0.80</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.84</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_BloodLossTRUE</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.82</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_AnemiaTRUE</td>
+<td style="text-align: right;">1.03</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">1.08</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_AlcoholTRUE</td>
+<td style="text-align: right;">0.84</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.93</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_DrugsTRUE</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.98</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">elix_PsychosesTRUE</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.87</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">elix_DepressionTRUE</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.96</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">as.factor(n_sx)1</td>
+<td style="text-align: right;">4.64</td>
+<td style="text-align: right;">4.19</td>
+<td style="text-align: right;">5.14</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">as.factor(n_sx)2</td>
+<td style="text-align: right;">9.24</td>
+<td style="text-align: right;">8.19</td>
+<td style="text-align: right;">10.43</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">as.factor(n_sx)3</td>
+<td style="text-align: right;">9.99</td>
+<td style="text-align: right;">8.33</td>
+<td style="text-align: right;">11.98</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">lives_in_msaTRUE</td>
+<td style="text-align: right;">1.43</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.55</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">as.factor(n_sx)1:lives_in_msaTRUE</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">0.88</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">as.factor(n_sx)2:lives_in_msaTRUE</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.82</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">as.factor(n_sx)3:lives_in_msaTRUE</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.99</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 
