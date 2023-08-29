@@ -2667,9 +2667,9 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 <div class="cell-output cell-output-stdout">
 <pre><code>Call: survfit(formula = Surv(age, als) ~ lives_in_msa, data = model_data)
 
-                        n events median 0.95LCL 0.95UCL
-lives_in_msa=FALSE  22700   3401     88      87      91
-lives_in_msa=TRUE  128473  23193     85      85      85</code></pre>
+                       n events median 0.95LCL 0.95UCL
+lives_in_msa=FALSE 17381   2500     88      87      91
+lives_in_msa=TRUE  97971  16726     85      84      85</code></pre>
 </div>
 </div>
 <p>Residents of MSAs are, on median, 85 years old when diagnosed compared to 88 among their peers that are non-MSA resident.</p>
@@ -2683,10 +2683,10 @@ lives_in_msa=TRUE  128473  23193     85      85      85</code></pre>
 <pre><code>Call: survfit(formula = Surv(age, als) ~ n_sx, data = model_data)
 
            n events median 0.95LCL 0.95UCL
-n_sx=0 93671   8115     96      93      NA
-n_sx=1 35715   9081     82      81      82
-n_sx=2 16034   6602     75      74      75
-n_sx=3  5753   2796     73      72      74</code></pre>
+n_sx=0 77476   6392     96      93      NA
+n_sx=1 24719   6695     79      79      80
+n_sx=2  9909   4458     72      71      72
+n_sx=3  3248   1681     71      70      72</code></pre>
 </div>
 </div>
 <p>The decrease is present in both residents and non-residents but the residents consistently have younger ages (although the difference may be n/s at times).</p>
@@ -2699,14 +2699,14 @@ n_sx=3  5753   2796     73      72      74</code></pre>
 <pre><code>Call: survfit(formula = Surv(age, als) ~ n_sx + lives_in_msa, data = model_data)
 
                                n events median 0.95LCL 0.95UCL
-n_sx=0, lives_in_msa=FALSE 14561    941    101      90      NA
-n_sx=0, lives_in_msa=TRUE  79110   7174     94      93      NA
-n_sx=1, lives_in_msa=FALSE  5289   1236     85      83      NA
-n_sx=1, lives_in_msa=TRUE  30426   7845     81      81      82
-n_sx=2, lives_in_msa=FALSE  2143    883     73      73      75
-n_sx=2, lives_in_msa=TRUE  13891   5719     75      74      76
-n_sx=3, lives_in_msa=FALSE   707    341     74      70      76
-n_sx=3, lives_in_msa=TRUE   5046   2455     73      72      74</code></pre>
+n_sx=0, lives_in_msa=FALSE 11956    746    101      90      NA
+n_sx=0, lives_in_msa=TRUE  65520   5646     96      93      NA
+n_sx=1, lives_in_msa=FALSE  3684    927     82      80      85
+n_sx=1, lives_in_msa=TRUE  21035   5768     79      79      80
+n_sx=2, lives_in_msa=FALSE  1336    614     71      69      73
+n_sx=2, lives_in_msa=TRUE   8573   3844     72      71      73
+n_sx=3, lives_in_msa=FALSE   405    213     71      65      74
+n_sx=3, lives_in_msa=TRUE   2843   1468     71      70      72</code></pre>
 </div>
 </div>
 
