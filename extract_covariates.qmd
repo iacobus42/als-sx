@@ -358,87 +358,115 @@ inpatient_volume <- inpatient_volume |>
 ```
 
 # Find Exposures
-## Falls or Injuries
-Falls are the ICD-9-CM and ICD-10-CM codes:
+Largely based on:
+
+https://bmcneurol.biomedcentral.com/articles/10.1186/1471-2377-13-160
 
 ```{r}
-falls_9 <- c("7197", "7812", "7813", "920", "95909", "9599", "E8889", "V1588")
-falls_10 <- c("R26", "R262", "R260", "R261", "R2681", "R2689", "R269", "R270", 
-              "R278", "R279", "S0003XA", "S0033XA", "S00431A", "S00432A", 
-              "S00439A", "S00531A", "S00532A", "S0083XA", "S0093XA", "S100XXA", 
-              "S1083XA", "S1093XA", "S0992XA", "S0993XA", "S168XXA", "S169XXA", 
-              "S1980XA", "S1981XA", "S1982XA", "S1983XA", "S1984XA", "S1985XA", 
-              "S1989XA", "S199XXA", "T148", "T1490", "W19XXXA", "W19XXXD")
+bulbar_symptoms <- tibble(
+  classification = c("speech", "swallowing"),
+  icd_9 = list(
+    c("31539", "4381", "7843", "7844", "7845", "7872", "43882"),
+    c("5277", "5278", "7841")
+  )
+) |> 
+  mutate(icd_9 = map(icd_9, children)) |>
+  unnest(icd_9) |>
+  mutate(group = "bulbar") |>
+  filter(is_billable(icd_9))
 
-bind_rows(
-  explain_table(falls_9) |>
-    select(code, long_desc),
-  explain_table(falls_10) |>
-    select(code, long_desc)
-  ) |> 
-  knitr::kable()
+motor_symptoms <- tibble(
+  classification = c("strength", "gait", "involuntary_movement", "pain", 
+                     "other", "falls"),
+  icd_9 = list(
+    c("7282", "72887"),
+    c("7197", "7812", "7813"),
+    c("72982", "72885", "7810"),
+    c("7194", "7295"),
+    c("728"),
+    c("E8889", "V1588")
+
+  )
+) |>
+  mutate(icd_9 = map(icd_9, children)) |>
+  unnest(icd_9) |>
+  mutate(group = "motor") |>
+  filter(is_billable(icd_9))
+```
+
+And we need to crosswalk these using the CMS mappings. Setting the relationship
+to "many-to-many" due to the not 1:1 mapping between ICD-9 and ICD-10. This
+really just suppresses a warning from the join and doesn't change how the join
+works.
+
+```{r}
+mapping_9_to_10 <- read_csv("https://data.nber.org/gem/icd9toicd10cmgem.csv") |>
+  rename(icd_9 = icd9cm, icd_10 = icd10cm) |>
+  select(icd_9, icd_10)
+
+bulbar_symptoms <- bulbar_symptoms |>
+  mutate(icd_9 = as.character(icd_9)) |>
+  left_join(
+    mapping_9_to_10,
+    by = "icd_9",    
+    relationship = "many-to-many"
+  )
+
+motor_symptoms <- motor_symptoms |>
+  mutate(icd_9 = as.character(icd_9)) |>
+  left_join(
+    mapping_9_to_10,
+    by = "icd_9",
+    relationship = "many-to-many"
+  )
+```
+
+So our final set of bulbar symptoms are:
+
+```{r}
+bulbar_symptoms |>
+  select(group, classification, icd_9, icd_10) |>
+  pivot_longer(cols = c(icd_9, icd_10), values_to = "code", names_to = "version") |>
+  arrange(group, classification, version, code) |>
+  group_by(version) |>
+  nest() |>
+  mutate(
+    data = map(data, \(x) x |> mutate(label = explain_table(code)$long_desc))
+  ) |>
+  unnest(data)
+```
+
+And limb or motor symptoms:
+
+```{r}
+motor_symptoms |>
+  select(group, classification, icd_9, icd_10) |>
+  pivot_longer(cols = c(icd_9, icd_10), values_to = "code", names_to = "version") |>
+  arrange(group, classification, version, code) |>
+  group_by(version) |>
+  nest() |>
+  mutate(
+    data = map(data, \(x) x |> mutate(label = explain_table(code)$long_desc))
+  ) |>
+  unnest(data)
 ```
 
 ```{r}
-falls <- unique_by_enrolid |>
-  filter(dx %in% c(falls_9, falls_10)) |>
-  mutate(fall = TRUE) |>
-  select(enrolid, fall) |>
-  distinct()
+symptoms <- bind_rows(bulbar_symptoms, motor_symptoms) |>
+  select(group, classification, icd_9, icd_10) |>
+  pivot_longer(cols = c(icd_9, icd_10), values_to = "dx", names_to = "version") |>
+  mutate(icd_version = ifelse(version == "icd_10", 10, 9)) |>
+  select(group, classification, icd_version, dx)
 ```
 
-## Muscle Symptoms
-Muscle symptoms are coded with:
+And then use this table to annotate the `unique_by_enrolid` diagnoses:
 
 ```{r}
-muscle_9 <- c("72885", "72887", "7282")
-muscle_10 <- c("M6283","M62838", "M62831", "M625", "M6250", "M6251", "M62511", 
-               "M62512", "M62519", "M6252", "M62521", "M62522", "M62529", 
-               "M6253", "M62531", "M62532", "M52539", "M6254", "M62541", 
-               "M62542", "M62549", "M6255", "M62551", "M62552", "M62559", 
-               "M6256", "M62561", "M62562", "M62569","M6257", "M62571", 
-               "M62572", "M62579", "M6258", "M6259", 
-               "M6251", "M6252", "M6259", "M6281", "M6283", "M62830", 
-               "M62831", "M62838")
-bind_rows(
-  explain_table(muscle_9) |>
-    select(code, long_desc),
-  explain_table(muscle_10) |>
-    select(code, long_desc)
-  ) |> 
-  knitr::kable()
-```
-
-```{r}
-muscle <- unique_by_enrolid |>
-  filter(dx %in% c(muscle_9, muscle_10)) |>
-  mutate(muscle = TRUE) |>
-  select(enrolid, muscle) |>
-  distinct()
-```
-
-## Oropharyngeal Problems
-Oropharyngeal problems are coded with:
-
-```{r}
-speech_9 <- c("32723", "78053", "78057", "78720", "78459", "V573")
-speech_10 <- c("G4733", "G4730", "R130", "R1310", "R4702", "R4781", "R4789", 
-               "R479")
-
-bind_rows(
-  explain_table(speech_9) |>
-    select(code, long_desc),
-  explain_table(speech_10) |>
-    select(code, long_desc)
-  ) |> 
-  knitr::kable()
-```
-
-```{r}
-op <- unique_by_enrolid |>
-  filter(dx %in% c(speech_9, speech_10)) |>
-  mutate(op = TRUE) |>
-  select(enrolid, op) |>
+exposures <- unique_by_enrolid |>
+  inner_join(symptoms, 
+             by = c("icd_version", "dx"),
+             relationship = "many-to-many") |>
+  select(enrolid, group, classification) |>
   distinct()
 ```
 
@@ -561,30 +589,47 @@ model_data <- model_data |>
   )
 ```
 
-Add the exposures:
+Add the exposures. First, the major classes:
 
 ```{r}
 model_data <- model_data |>
   left_join(
-    falls,
-    by = "enrolid"
-  ) |>
+    exposures |> 
+      select(enrolid, group) |>
+      distinct() |>
+      mutate(value = TRUE) |>
+      pivot_wider(names_from = group, values_from = value),
+    by = "enrolid")
+```
+
+And then the sub-classifications:
+
+```{r}
+model_data <- model_data |>
   left_join(
-    muscle,
-    by = "enrolid"
-  ) |>
-  left_join(
-    op,
-    by = "enrolid"
-  ) |>
-  inner_join(
-    resides_in_msa,
-    by = "enrolid"
-  ) |>
+    exposures |> 
+      select(enrolid, classification) |>
+      distinct() |>
+      mutate(value = TRUE) |>
+      pivot_wider(names_from = classification, values_from = value),
+    by = "enrolid")
+```
+
+And then addressing the implicit `FALSE` values:
+
+```{r}
+model_data <- model_data |>
   mutate(
-    fall = replace_na(fall, FALSE),
-    muscle = replace_na(muscle, FALSE),
-    op = replace_na(op, FALSE)
+    motor = replace_na(motor, FALSE),
+    bulbar = replace_na(bulbar, FALSE),
+    speech = replace_na(speech, FALSE),
+    swallowing = replace_na(swallowing, FALSE),
+    strength = replace_na(strength, FALSE),
+    gait = replace_na(gait, FALSE),
+    involuntary_movement = replace_na(involuntary_movement, FALSE),
+    pain = replace_na(pain, FALSE),
+    other = replace_na(other, FALSE),
+    falls = replace_na(falls, FALSE)
   )
 ```
 

@@ -24,8 +24,11 @@ model_data <- model_data |>
     female = sex == 1,
     stratum = as.numeric(as.factor(glue::glue("{first_year}-{last_year}-{dobyr}-{sex}")))
   ) |>
-  mutate(n_sx = fall + op + muscle,
-         any_sx = fall | op | muscle)
+  mutate(any_sx = motor | bulbar,
+         n_groups = motor + bulbar,
+         n_bulbar = speech + swallowing,
+         n_motor = strength + gait + involuntary_movement + pain + other + falls,
+         n_total = speech + swallowing + strength + gait + involuntary_movement + pain + other + falls)
 ```
 
 # Data Summary
@@ -44,9 +47,11 @@ all_vars <- c(
   "elix_Coagulopathy", "elix_Obesity", "elix_WeightLoss", "elix_FluidsLytes", "elix_BloodLoss", 
   "elix_Anemia", "elix_Alcohol", "elix_Drugs", "elix_Psychoses", "elix_Depression", 
   "lives_in_msa",
-  "any_sx", "n_sx", 
-  "fall", "muscle", "op")
-factor_vars <- c("n_sx")
+  "any_sx", "motor", "bulbar",
+  "n_groups", "n_bulbar", "n_motor", "n_total",
+  "speech", "swallowing", 
+  "strength", "gait", "involuntary_movement", "pain", "other", "falls")
+factor_vars <- c("n_groups", "n_bulbar", "n_motor", "n_total")
 nonnormal_vars <- c("age", "first_year", "last_year", "rate_outpatient_visits", 
   "intensity_outpatient_visits_dx", "rate_inpatient_stays", 
   "intensity_inpatient_stays_los")
@@ -73,13 +78,13 @@ CreateTableOne(
 ```
 
 # Define Models
-I want to fit five models: 
+I want to fit XXXX models: 
 
 First, does having any of these codes increase the odds of getting an ALS 
 diagnosis?
 
 ```{r}
-any_fml_unadj <- als ~ I(fall | muscle | op) * lives_in_msa + strata(stratum)
+any_fml_unadj <- als ~ any_sx * lives_in_msa + strata(stratum)
 
 any_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
                    rate_inpatient_stays + intensity_inpatient_stays_los +
@@ -89,13 +94,162 @@ any_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx
                    elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
                    elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
                    elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
-                   I(fall | muscle | op) * lives_in_msa + strata(stratum)
+                   any_sx * lives_in_msa + strata(stratum)
 ```
 
-Second, does the risk increase with each additional code?
+Second, what is the independent effect of bulbar symptoms?
 
 ```{r}
-number_fml_unadj <- als ~ as.factor(I(fall + muscle + op)) * lives_in_msa + strata(stratum)
+any_bulbar_unadj <- als ~ bulbar * lives_in_msa + strata(stratum)
+
+any_bulbar_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   bulbar * lives_in_msa + strata(stratum)
+```
+
+Third, what is the independent effect of motor symptoms?
+
+```{r}
+any_motor_unadj <- als ~ motor * lives_in_msa + strata(stratum)
+
+any_motor_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   motor * lives_in_msa + strata(stratum)
+```
+
+Fourth, what is the effect of symptoms from 0, 1, or 2 affects systems?
+
+```{r}
+number_origin_unadj <- als ~ as.factor(I(bulbar + motor)) * lives_in_msa + strata(stratum)
+
+number_origin_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   as.factor(I(bulbar + motor)) * lives_in_msa + strata(stratum)
+```
+
+Fifth, what is the effect of the symptom sub-class? This is actually many 
+models...
+
+```{r}
+speech_fml_unadj <- als ~ speech * lives_in_msa + strata(stratum)
+
+speech_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   speech * lives_in_msa + strata(stratum)
+
+swallowing_fml_unadj <- als ~ swallowing * lives_in_msa + strata(stratum)
+
+swallowing_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   swallowing * lives_in_msa + strata(stratum)
+
+strength_fml_unadj <- als ~ strength * lives_in_msa + strata(stratum)
+
+strength_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   strength * lives_in_msa + strata(stratum)
+
+gait_fml_unadj <- als ~ gait * lives_in_msa + strata(stratum)
+
+gait_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   gait * lives_in_msa + strata(stratum)
+
+involuntary_movement_fml_unadj <- als ~ involuntary_movement * lives_in_msa + strata(stratum)
+
+involuntary_movement_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   involuntary_movement * lives_in_msa + strata(stratum)
+
+pain_fml_unadj <- als ~ pain * lives_in_msa + strata(stratum)
+
+pain_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   pain * lives_in_msa + strata(stratum)
+
+other_fml_unadj <- als ~ other * lives_in_msa + strata(stratum)
+
+other_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   other * lives_in_msa + strata(stratum)
+
+falls_fml_unadj <- als ~ falls * lives_in_msa + strata(stratum)
+
+falls_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
+                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
+                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
+                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
+                   falls * lives_in_msa + strata(stratum)
+```
+
+Sixth, does the risk increase with each additional symptom?
+
+```{r}
+number_fml_unadj <- als ~ as.factor(n_total) * lives_in_msa + strata(stratum)
 
 number_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
                    rate_inpatient_stays + intensity_inpatient_stays_los +
@@ -105,47 +259,7 @@ number_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits
                    elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
                    elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
                    elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
-                   as.factor(I(fall + muscle + op)) * lives_in_msa + strata(stratum)
-```
-
-And for models three to five, does the risk vary between the codes?
-
-```{r}
-fall_fml_unadj <- als ~ fall * lives_in_msa + strata(stratum)
-
-fall_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
-                   rate_inpatient_stays + intensity_inpatient_stays_los +
-                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
-                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
-                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
-                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
-                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
-                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
-                   fall * lives_in_msa + strata(stratum)
-
-muscle_fml_unadj <- als ~ muscle * lives_in_msa + strata(stratum)
-
-muscle_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
-                   rate_inpatient_stays + intensity_inpatient_stays_los +
-                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
-                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
-                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
-                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
-                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
-                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
-                   muscle * lives_in_msa + strata(stratum)
-
-op_fml_unadj <- als ~ op * lives_in_msa + strata(stratum)
-
-op_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
-                   rate_inpatient_stays + intensity_inpatient_stays_los +
-                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
-                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
-                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
-                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
-                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
-                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses + elix_Depression + 
-                   op * lives_in_msa + strata(stratum)
+                   as.factor(n_total) * lives_in_msa + strata(stratum)
 ```
 
 Quick note: all of these models omit year, age, and sex. This is because the
@@ -171,10 +285,10 @@ clogit(
   knitr::kable(digits = 2)
 ```
 
-The odds are increased following one or more symptom (OR = 8.95), for those 
-living in MSAs (OR = 1.49), but there is a multiplicative decrease in odds for
-ALS for those with symptoms living in an MSA (OR = 0.79). The odds are still
-increased (OR = $0.79 * 8.95 = 7.05$) but less than for those who do not live
+The odds are increased following one or more symptom (OR = 7.44), for those 
+living in MSAs (OR = 1.43), but there is a multiplicative decrease in odds for
+ALS for those with symptoms living in an MSA (OR = 0.84). The odds are still
+increased (OR = $0.84 * 7.44 = 6.25$) but less than for those who do not live
 in MSAs.
 
 After adjustment, the story stays the same:
@@ -194,15 +308,364 @@ clogit(
   knitr::kable(digits = 2)
 ```
 
-The odds are remain increased following one or more symptom (OR = 6.40), for 
-those living in MSAs (OR = 1.47), but there is a multiplicative decrease in odds
-for ALS for those with symptoms living in an MSA (OR = 0.79). The odds are still
-increased (OR = $0.79 * 6.40 = 5.06$) but less than for those who do not live
-in MSAs.
+## Are There Differences Between Bulbar and Motor Symptoms?
+First, only bulbar, without:
 
-## Does the Risk Increase With More Risk Factors?
+```{r}
+clogit(
+  any_bulbar_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+and with adjustment:
+
+```{r}
+clogit(
+  any_bulbar_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+And then only motor without
+
+```{r}
+clogit(
+  any_motor_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+and with adjustment:
+
+```{r}
+clogit(
+  any_motor_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+## Does the Risk Increase With Symptoms From Different Origins?
 Without adjustment:
 
+```{r}
+clogit(
+  number_origin_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+And with adjustment
+
+```{r}
+clogit(
+  number_origin_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+## By Symptom
+### Bulbar Symptoms
+#### Speech Problems
+
+```{r}
+clogit(
+  speech_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  speech_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Swallowing Problems
+
+```{r}
+clogit(
+  swallowing_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  swallowing_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+### Motor Problems
+#### Strength Problems
+```{r}
+clogit(
+  strength_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  strength_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Gait Problems
+```{r}
+clogit(
+  gait_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  gait_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Involuntary Movements
+```{r}
+clogit(
+  involuntary_movement_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  involuntary_movement_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Pain
+```{r}
+clogit(
+  pain_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  pain_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Falls
+```{r}
+clogit(
+  falls_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  falls_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+#### Other
+```{r}
+clogit(
+  other_fml_unadj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+```{r}
+clogit(
+  other_fml_fulladj,
+  model_data
+) |> 
+  broom::tidy() |>
+  mutate(
+    or = exp(estimate),
+    lb = exp(estimate - 1.96 * std.error),
+    ub = exp(estimate + 1.96 * std.error)
+  ) |>
+  select(term, or, lb, ub) |>
+  knitr::kable(digits = 2)
+```
+
+### Number of Symptoms
 ```{r}
 clogit(
   number_fml_unadj,
@@ -218,123 +681,9 @@ clogit(
   knitr::kable(digits = 2)
 ```
 
-There is a dose-response pattern for more symptoms: OR = 6.05, 19.26, and 30.94. 
-MSA remains a risk factor at 1.40. The interaction between MSA and the symptoms
-does not vary by the number of symptoms (0.80, 0.70, 0.75). 
-
 ```{r}
 clogit(
   number_fml_fulladj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-The dose response pattern is robust to adjustment: 5.09, 13.09, 16.30. The 
-MSA effect is similar to before (OR = 1.48) and again does not vary with the 
-MSA status (0.80, 0.73, 0.87). 
-
-## By Risk Factor
-### Falls and Injuries
-Without adjustment:
-
-```{r}
-clogit(
-  fall_fml_unadj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-With adjustment:
-
-```{r}
-clogit(
-  fall_fml_fulladj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-### Muscle Problems
-Without adjustment:
-
-```{r}
-clogit(
-  muscle_fml_unadj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-With adjustment:
-
-```{r}
-clogit(
-  muscle_fml_fulladj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-### Muscle Problems
-Without adjustment:
-
-```{r}
-clogit(
-  op_fml_unadj,
-  model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
-  knitr::kable(digits = 2)
-```
-
-With adjustment:
-
-```{r}
-clogit(
-  op_fml_fulladj,
   model_data
 ) |> 
   broom::tidy() |>
