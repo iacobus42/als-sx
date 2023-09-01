@@ -14,7 +14,11 @@ library(tableone)
 
 # Data Loading and Processing
 ```{r}
-model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+if (Sys.info()["sysname"] == "Darwin") {
+  model_data <- read_rds("/Volumes/lss_jsimmeri/als/model_data.rds")
+} else {
+  model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+}
 ```
 
 ```{r}
@@ -262,6 +266,7 @@ number_fml_fulladj <- als ~ rate_outpatient_visits + intensity_outpatient_visits
                    as.factor(n_total) * lives_in_msa + strata(stratum)
 ```
 
+
 Quick note: all of these models omit year, age, and sex. This is because the
 data are matched on age, sex, and enrollment start/end dates. Including the 
 strata accounts for these factors while also properly clustering the errors.
@@ -271,17 +276,13 @@ strata accounts for these factors while also properly clustering the errors.
 Without adjustment:
 
 ```{r}
+library(gtsummary)
 clogit(
   any_fml_unadj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
@@ -298,65 +299,45 @@ clogit(
   any_fml_fulladj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ## Are There Differences Between Bulbar and Motor Symptoms?
-First, only bulbar, without:
+Bulbar symptoms alone increases the odds before adjustment:
 
 ```{r}
 clogit(
   any_bulbar_unadj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
-and with adjustment:
+And unsurprisingly adjustment does not change the story:
 
 ```{r}
 clogit(
   any_bulbar_fulladj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
-And then only motor without
+The same is true of motor symptoms
 
 ```{r}
 clogit(
   any_motor_unadj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
@@ -367,13 +348,8 @@ clogit(
   any_motor_fulladj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
@@ -385,13 +361,8 @@ clogit(
   number_origin_unadj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
@@ -402,13 +373,8 @@ clogit(
   number_origin_fulladj,
   model_data
 ) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
@@ -417,281 +383,355 @@ clogit(
 #### Speech Problems
 
 ```{r}
-clogit(
+speech_unadjusted <- clogit(
   speech_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+speech_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+speech_adjusted <- clogit(
   speech_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+speech_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Swallowing Problems
 
 ```{r}
-clogit(
+swallowing_unadjusted <- clogit(
   swallowing_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+swallowing_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+swallowing_adjusted <- clogit(
   swallowing_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+swallowing_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ### Motor Problems
 #### Strength Problems
 ```{r}
-clogit(
+strength_unadjusted <- clogit(
   strength_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+strength_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+strength_adjusted <- clogit(
   strength_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+strength_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Gait Problems
 ```{r}
-clogit(
+gait_unadjusted <- clogit(
   gait_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+gait_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+gait_adjusted <- clogit(
   gait_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+gait_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Involuntary Movements
 ```{r}
-clogit(
+involuntary_movements_unadjusted <- clogit(
   involuntary_movement_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+involuntary_movements_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+involuntary_movements_adjusted <- clogit(
   involuntary_movement_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+involuntary_movements_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Pain
 ```{r}
-clogit(
+pain_unadjusted <- clogit(
   pain_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+pain_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+pain_adjusted <- clogit(
   pain_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+pain_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Falls
 ```{r}
-clogit(
+falls_unadjusted <- clogit(
   falls_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+falls_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+falls_adjusted <- clogit(
   falls_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+falls_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 #### Other
 ```{r}
-clogit(
+other_unadjusted <- clogit(
   other_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+other_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+other_adjusted <- clogit(
   other_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+) 
+
+other_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
+```
+
+To summarize these in a practical way:
+
+```{r}
+list(
+  speech_unadjusted,
+  swallowing_unadjusted,
+  strength_unadjusted,
+  gait_unadjusted,
+  involuntary_movements_unadjusted,
+  pain_unadjusted,
+  falls_unadjusted,
+  other_unadjusted
+) |>
+  lapply(
+    broom::tidy,
+    exponentiate = TRUE,
+    conf.int = TRUE
+  ) |>
+  enframe() |>
+  mutate(
+    symptom = c("Speech", "Swallowing", "Muscle",
+                "Gait", "Involuntary\nMovements", "Pain", "Falls",
+                "Other Motor")
+  ) |>
+  unnest(cols = value) |>
+  mutate(
+    variable = rep(c("Symptom", "Lives in Urban Area", "Symptom x Lives in Urban Area"), 8)
+  ) |>
+  mutate(
+    symptom = forcats::fct_relevel(
+      symptom,
+      "Speech", "Swallowing", "Muscle",
+      "Gait", "Involuntary\nMovements", "Pain", "Falls",
+      "Other Motor"
+    ),
+    variable = forcats::fct_relevel(
+      variable,
+      "Symptom", "Lives in Urban Area", "Symptom x Lives in Urban Area"
+    )
+  ) |>
+  ggplot(
+    aes(
+      x = symptom,
+      y = estimate,
+      ymin = conf.low,
+      ymax = conf.high
+    )
+  ) + 
+  geom_point() +
+  geom_linerange() +
+  facet_grid(rows = vars(variable), scale = "free_y") +
+  geom_hline(yintercept = 1, linetype = 2) +
+  labs(x = "", y = "Odds Ratio\n(95% CI)") +
+  theme_bw()
+```
+
+```{r}
+list(
+  speech_adjusted,
+  swallowing_adjusted,
+  strength_adjusted,
+  gait_adjusted,
+  involuntary_movements_adjusted,
+  pain_adjusted,
+  falls_adjusted,
+  other_adjusted
+) |>
+  lapply(
+    broom::tidy,
+    exponentiate = TRUE,
+    conf.int = TRUE
+  ) |>
+  enframe() |>
+  mutate(
+    symptom = c("Speech", "Swallowing", "Muscle",
+                "Gait", "Involuntary\nMovements", "Pain", "Falls",
+                "Other Motor")
+  ) |>
+  unnest(cols = value) |>
+  group_by(symptom) |>
+  filter(row_number() >= 35) |>
+  ungroup() |>
+  mutate(
+    variable = rep(c("Symptom", "Lives in Urban Area", "Symptom x Lives in Urban Area"), 8)
+  ) |>
+  mutate(
+    symptom = forcats::fct_relevel(
+      symptom,
+      "Speech", "Swallowing", "Muscle",
+      "Gait", "Involuntary\nMovements", "Pain", "Falls",
+      "Other Motor"
+    ),
+    variable = forcats::fct_relevel(
+      variable,
+      "Symptom", "Lives in Urban Area", "Symptom x Lives in Urban Area"
+    )
+  ) |>
+  ggplot(
+    aes(
+      x = symptom,
+      y = estimate,
+      ymin = conf.low,
+      ymax = conf.high
+    )
+  ) + 
+  geom_point() +
+  geom_linerange() +
+  facet_grid(rows = vars(variable), scale = "free_y") +
+  geom_hline(yintercept = 1, linetype = 2) +
+  labs(x = "", y = "Odds Ratio\n(95% CI)") +
+  theme_bw()
 ```
 
 ### Number of Symptoms
 ```{r}
-clogit(
+n_symptoms_unadjusted <- clogit(
   number_fml_unadj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+n_symptoms_unadjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
 
 ```{r}
-clogit(
+n_symptoms_adjusted <- clogit(
   number_fml_fulladj,
   model_data
-) |> 
-  broom::tidy() |>
-  mutate(
-    or = exp(estimate),
-    lb = exp(estimate - 1.96 * std.error),
-    ub = exp(estimate + 1.96 * std.error)
-  ) |>
-  select(term, or, lb, ub) |>
+)
+
+n_symptoms_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
+
+n_symptoms_adjusted |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  filter(!stringr::str_detect(term, "msa"), stringr::str_detect(term, "as.factor")) |>
+  mutate(
+    variable = 1:8
+  ) |>
+  ggplot(aes(x = variable, 
+             y = estimate,
+             ymin = conf.low,
+             ymax = conf.high)) + 
+  geom_point() + 
+  geom_linerange() + 
+  labs(x = "Number of Symptoms", y = "ORs Compared to Having No Symptoms\n(95% CI)") + 
+  theme_bw()
 ```
