@@ -10,6 +10,7 @@ format:
 ```{r pkg-load}
 library(tidyverse)
 library(survival)
+library(patchwork)
 ```
 
 Living in an MSA seeks to be consistently associated with lower negative effects
@@ -19,7 +20,11 @@ their disease course. One way to look at this would be to check the age at
 first diagnosis of ALS. 
 
 ```{r}
-model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+if (Sys.info()["sysname"] == "Darwin") {
+  model_data <- read_rds("/Volumes/lss_jsimmeri/als/model_data.rds")
+} else {
+  model_data <- read_rds("/Shared/lss_jsimmeri/als/model_data.rds")
+}
 
 model_data <- model_data |>
   mutate(
@@ -27,8 +32,11 @@ model_data <- model_data |>
     female = sex == 1,
     stratum = as.numeric(as.factor(glue::glue("{first_year}-{last_year}-{dobyr}-{sex}")))
   ) |>
-  mutate(n_sx = fall + op + muscle,
-         any_sx = fall | op | muscle)
+  mutate(any_sx = motor | bulbar,
+         n_groups = motor + bulbar,
+         n_bulbar = speech + swallowing,
+         n_motor = strength + gait + involuntary_movement + pain + other + falls,
+         n_total = speech + swallowing + strength + gait + involuntary_movement + pain + other + falls)
 ```
 
 Living in an MSA is associated with an younger age at diagnosis:
@@ -37,36 +45,90 @@ Living in an MSA is associated with an younger age at diagnosis:
 survfit(
   Surv(age, als) ~ lives_in_msa,
   data = model_data
-)
+) |>
+  broom::tidy() |>
+  mutate(
+    strata = ifelse(strata == "lives_in_msa=TRUE", "Urban Area", "Non-Urban Area")
+  ) |>
+  ggplot(
+    aes(x = time, y = estimate, 
+        ymin = conf.low, ymax = conf.high,
+        color = forcats::fct_rev(strata), fill = forcats::fct_rev(strata))
+  ) +
+  geom_step() + 
+  geom_ribbon(alpha = 0.25, linetype = 0) + 
+  theme_minimal() +
+  labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
+  theme(legend.position = c(0.25, 0.25))
 ```
 
-Residents of MSAs are, on median, 85 years old when diagnosed compared to 88 
-among their peers that are non-MSA resident. 
+Likewise, having symptoms lowers age:
 
 ```{r}
 survfit(
   Surv(age, als) ~ any_sx,
   data = model_data
-)
+) |>
+  broom::tidy() |>
+  mutate(
+    strata = ifelse(strata == "any_sx=TRUE", "Has Symptoms", "Does Not Have Symptoms")
+  ) |>
+  ggplot(
+    aes(x = time, y = estimate, 
+        ymin = conf.low, ymax = conf.high,
+        color = forcats::fct_rev(strata), fill = forcats::fct_rev(strata))
+  ) +
+  geom_step() + 
+  geom_ribbon(alpha = 0.25, linetype = 0) +
+  theme_minimal() +
+  labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
+  theme(legend.position = c(0.25, 0.25))
 ```
 
-The median age of diagnosis decreases with the number of symptoms:
+Which is interactive between MSA and symptoms:
 
 ```{r}
 survfit(
-  Surv(age, als) ~ n_sx,
+  Surv(age, als) ~ any_sx + lives_in_msa,
   data = model_data
-)
+) |>
+  broom::tidy() |>
+  mutate(
+    msa = ifelse(stringr::str_detect(strata, "msa=TRUE"), "Urban Area", "Non-Urban Area"),
+    sx = ifelse(stringr::str_detect(strata, "sx=TRUE"), "Has Symptoms", "Does Not Have Symptoms")
+  ) |>
+  ggplot(
+    aes(x = time, y = estimate, 
+        ymin = conf.low, ymax = conf.high,
+        color = sx, fill = sx, linetype = msa, group = paste0(sx, msa))
+  ) + 
+  geom_step() + 
+  geom_ribbon(alpha = 0.25, linetype = 0) +
+  theme_minimal() +
+  labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
+  theme(legend.position = c(0.25, 0.25))
 ```
 
-The decrease is present in both residents and non-residents but the residents
-consistently have younger ages (although the difference may be n/s at times).
+And there is a dose response pattern:
 
 ```{r}
 survfit(
-  Surv(age, als) ~ n_sx + lives_in_msa,
+  Surv(age, als) ~ n_total,
   data = model_data
-)
+) |> 
+  broom::tidy() |>
+  mutate(
+    strata = stringr::str_extract(strata, "[0-8]")
+  ) |>
+  ggplot(
+    aes(x = time, y = estimate, 
+        ymin = conf.low, ymax = conf.high,
+        color = strata, fill = strata)
+  ) +
+  geom_step() +
+  theme_minimal() +
+  labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
+  theme(legend.position = c(0.25, 0.25))
 ```
 
 Testing whether these are multiplicative/addictive or have overlap:
@@ -81,17 +143,12 @@ coxph(
                    elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
                    elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
                    elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses +
-                   elix_Depression + as.factor(n_sx) * lives_in_msa + strata(stratum),
+                   elix_Depression + as.factor(any_sx) * lives_in_msa + strata(stratum),
   data = model_data,
   robust = TRUE,
   cluster = stratum
-) |>
-  broom::tidy() |>
-  mutate(
-    hr = exp(estimate),
-    lb = exp(estimate - 1.96 * robust.se),
-    ub = exp(estimate + 1.96 * robust.se)
-  ) |>
-  select(term, hr, lb, ub) |>
+) |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 2)
 ```
