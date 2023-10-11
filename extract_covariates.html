@@ -3142,8 +3142,9 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 <p>And also the set of unique diagnoses recorded during the period:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>unique_by_enrolid <span class="ot">&lt;-</span> dx_tbl <span class="sc">|&gt;</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, icd_version, dx) <span class="sc">|&gt;</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(enrolid, icd_version, dx) <span class="sc">|&gt;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">first_dx_date =</span> <span class="fu">min</span>(date),</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="calculate-comorbidity-flags" class="level1">
@@ -3245,697 +3246,328 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 </section>
 <section id="find-exposures" class="level1">
 <h1>Find Exposures</h1>
-<section id="falls-or-injuries" class="level2">
-<h2 class="anchored" data-anchor-id="falls-or-injuries">Falls or Injuries</h2>
-<p>Falls are the ICD-9-CM and ICD-10-CM codes:</p>
+<p>Largely based on:</p>
+<p>https://bmcneurol.biomedcentral.com/articles/10.1186/1471-2377-13-160</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>falls_9 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;7197&quot;</span>, <span class="st">&quot;7812&quot;</span>, <span class="st">&quot;7813&quot;</span>, <span class="st">&quot;920&quot;</span>, <span class="st">&quot;95909&quot;</span>, <span class="st">&quot;9599&quot;</span>, <span class="st">&quot;E8889&quot;</span>, <span class="st">&quot;V1588&quot;</span>)</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>falls_10 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;R26&quot;</span>, <span class="st">&quot;R262&quot;</span>, <span class="st">&quot;R260&quot;</span>, <span class="st">&quot;R261&quot;</span>, <span class="st">&quot;R2681&quot;</span>, <span class="st">&quot;R2689&quot;</span>, <span class="st">&quot;R269&quot;</span>, <span class="st">&quot;R270&quot;</span>, </span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;R278&quot;</span>, <span class="st">&quot;R279&quot;</span>, <span class="st">&quot;S0003XA&quot;</span>, <span class="st">&quot;S0033XA&quot;</span>, <span class="st">&quot;S00431A&quot;</span>, <span class="st">&quot;S00432A&quot;</span>, </span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;S00439A&quot;</span>, <span class="st">&quot;S00531A&quot;</span>, <span class="st">&quot;S00532A&quot;</span>, <span class="st">&quot;S0083XA&quot;</span>, <span class="st">&quot;S0093XA&quot;</span>, <span class="st">&quot;S100XXA&quot;</span>, </span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;S1083XA&quot;</span>, <span class="st">&quot;S1093XA&quot;</span>, <span class="st">&quot;S0992XA&quot;</span>, <span class="st">&quot;S0993XA&quot;</span>, <span class="st">&quot;S168XXA&quot;</span>, <span class="st">&quot;S169XXA&quot;</span>, </span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;S1980XA&quot;</span>, <span class="st">&quot;S1981XA&quot;</span>, <span class="st">&quot;S1982XA&quot;</span>, <span class="st">&quot;S1983XA&quot;</span>, <span class="st">&quot;S1984XA&quot;</span>, <span class="st">&quot;S1985XA&quot;</span>, </span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;S1989XA&quot;</span>, <span class="st">&quot;S199XXA&quot;</span>, <span class="st">&quot;T148&quot;</span>, <span class="st">&quot;T1490&quot;</span>, <span class="st">&quot;W19XXXA&quot;</span>, <span class="st">&quot;W19XXXD&quot;</span>)</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(falls_9) <span class="sc">|&gt;</span></span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc),</span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(falls_10) <span class="sc">|&gt;</span></span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc)</span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output-display">
-<table class="table table-sm table-striped">
-<colgroup>
-<col style="width: 8%">
-<col style="width: 91%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">code</th>
-<th style="text-align: left;">long_desc</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">7197</td>
-<td style="text-align: left;">Difficulty in walking</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">7812</td>
-<td style="text-align: left;">Abnormality of gait</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">7813</td>
-<td style="text-align: left;">Lack of coordination</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">920</td>
-<td style="text-align: left;">Contusion of face, scalp, and neck except eye(s)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">95909</td>
-<td style="text-align: left;">Injury of face and neck</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">9599</td>
-<td style="text-align: left;">Unspecified site injury</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">E8889</td>
-<td style="text-align: left;">Unspecified fall</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">V1588</td>
-<td style="text-align: left;">History of fall</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R26</td>
-<td style="text-align: left;">Abnormalities of gait and mobility</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R262</td>
-<td style="text-align: left;">Difficulty in walking, not elsewhere classified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R260</td>
-<td style="text-align: left;">Ataxic gait</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R261</td>
-<td style="text-align: left;">Paralytic gait</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R2681</td>
-<td style="text-align: left;">Unsteadiness on feet</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R2689</td>
-<td style="text-align: left;">Other abnormalities of gait and mobility</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R269</td>
-<td style="text-align: left;">Unspecified abnormalities of gait and mobility</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R270</td>
-<td style="text-align: left;">Ataxia, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R278</td>
-<td style="text-align: left;">Other lack of coordination</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R279</td>
-<td style="text-align: left;">Unspecified lack of coordination</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S0003XA</td>
-<td style="text-align: left;">Contusion of scalp, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S0033XA</td>
-<td style="text-align: left;">Contusion of nose, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S00431A</td>
-<td style="text-align: left;">Contusion of right ear, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S00432A</td>
-<td style="text-align: left;">Contusion of left ear, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S00439A</td>
-<td style="text-align: left;">Contusion of unspecified ear, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S00531A</td>
-<td style="text-align: left;">Contusion of lip, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S00532A</td>
-<td style="text-align: left;">Contusion of oral cavity, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S0083XA</td>
-<td style="text-align: left;">Contusion of other part of head, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S0093XA</td>
-<td style="text-align: left;">Contusion of unspecified part of head, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S100XXA</td>
-<td style="text-align: left;">Contusion of throat, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S1083XA</td>
-<td style="text-align: left;">Contusion of other specified part of neck, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S1093XA</td>
-<td style="text-align: left;">Contusion of unspecified part of neck, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S0992XA</td>
-<td style="text-align: left;">Unspecified injury of nose, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S0993XA</td>
-<td style="text-align: left;">Unspecified injury of face, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S168XXA</td>
-<td style="text-align: left;">Other specified injury of muscle, fascia and tendon at neck level, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S169XXA</td>
-<td style="text-align: left;">Unspecified injury of muscle, fascia and tendon at neck level, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S1980XA</td>
-<td style="text-align: left;">Other specified injuries of unspecified part of neck, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S1981XA</td>
-<td style="text-align: left;">Other specified injuries of larynx, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S1982XA</td>
-<td style="text-align: left;">Other specified injuries of cervical trachea, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S1983XA</td>
-<td style="text-align: left;">Other specified injuries of vocal cord, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S1984XA</td>
-<td style="text-align: left;">Other specified injuries of thyroid gland, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S1985XA</td>
-<td style="text-align: left;">Other specified injuries of pharynx and cervical esophagus, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">S1989XA</td>
-<td style="text-align: left;">Other specified injuries of other specified part of neck, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">S199XXA</td>
-<td style="text-align: left;">Unspecified injury of neck, initial encounter</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">T148</td>
-<td style="text-align: left;">Other injury of unspecified body region</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">T1490</td>
-<td style="text-align: left;">Injury, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">W19XXXA</td>
-<td style="text-align: left;">Unspecified fall, initial encounter</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">W19XXXD</td>
-<td style="text-align: left;">Unspecified fall, subsequent encounter</td>
-</tr>
-</tbody>
-</table>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>bulbar_symptoms <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">classification =</span> <span class="fu">c</span>(<span class="st">&quot;speech&quot;</span>, <span class="st">&quot;swallowing&quot;</span>),</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">icd_9 =</span> <span class="fu">list</span>(</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;31539&quot;</span>, <span class="st">&quot;4381&quot;</span>, <span class="st">&quot;7843&quot;</span>, <span class="st">&quot;7844&quot;</span>, <span class="st">&quot;7845&quot;</span>, <span class="st">&quot;7872&quot;</span>, <span class="st">&quot;43882&quot;</span>),</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;5277&quot;</span>, <span class="st">&quot;5278&quot;</span>, <span class="st">&quot;7841&quot;</span>)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span> </span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">icd_9 =</span> <span class="fu">map</span>(icd_9, children)) <span class="sc">|&gt;</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(icd_9) <span class="sc">|&gt;</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">group =</span> <span class="st">&quot;bulbar&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is_billable</span>(icd_9))</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>motor_symptoms <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">classification =</span> <span class="fu">c</span>(<span class="st">&quot;strength&quot;</span>, <span class="st">&quot;gait&quot;</span>, <span class="st">&quot;involuntary_movement&quot;</span>, <span class="st">&quot;pain&quot;</span>, </span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&quot;other&quot;</span>, <span class="st">&quot;falls&quot;</span>),</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">icd_9 =</span> <span class="fu">list</span>(</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;7282&quot;</span>, <span class="st">&quot;72887&quot;</span>),</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;7197&quot;</span>, <span class="st">&quot;7812&quot;</span>, <span class="st">&quot;7813&quot;</span>),</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;72982&quot;</span>, <span class="st">&quot;72885&quot;</span>, <span class="st">&quot;7810&quot;</span>),</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;7194&quot;</span>, <span class="st">&quot;7295&quot;</span>),</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;728&quot;</span>),</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">&quot;E8889&quot;</span>, <span class="st">&quot;V1588&quot;</span>)</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">icd_9 =</span> <span class="fu">map</span>(icd_9, children)) <span class="sc">|&gt;</span></span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(icd_9) <span class="sc">|&gt;</span></span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">group =</span> <span class="st">&quot;motor&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is_billable</span>(icd_9))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>And we need to crosswalk these using the CMS mappings. Setting the relationship to “many-to-many” due to the not 1:1 mapping between ICD-9 and ICD-10. This really just suppresses a warning from the join and doesn’t change how the join works.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>mapping_9_to_10 <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">&quot;https://data.nber.org/gem/icd9toicd10cmgem.csv&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">icd_9 =</span> icd9cm, <span class="at">icd_10 =</span> icd10cm) <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(icd_9, icd_10)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Rows: 23912 Columns: 8
+-- Column specification --------------------------------------------------------
+Delimiter: &quot;,&quot;
+chr (3): icd9cm, icd10cm, flags
+dbl (5): approximate, no_map, combination, scenario, choice_list
+
+i Use `spec()` to retrieve the full column specification for this data.
+i Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>bulbar_symptoms <span class="ot">&lt;-</span> bulbar_symptoms <span class="sc">|&gt;</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">icd_9 =</span> <span class="fu">as.character</span>(icd_9)) <span class="sc">|&gt;</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    mapping_9_to_10,</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;icd_9&quot;</span>,    </span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">relationship =</span> <span class="st">&quot;many-to-many&quot;</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>motor_symptoms <span class="ot">&lt;-</span> motor_symptoms <span class="sc">|&gt;</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">icd_9 =</span> <span class="fu">as.character</span>(icd_9)) <span class="sc">|&gt;</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    mapping_9_to_10,</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;icd_9&quot;</span>,</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">relationship =</span> <span class="st">&quot;many-to-many&quot;</span></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>So our final set of bulbar symptoms are:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>bulbar_symptoms <span class="sc">|&gt;</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, classification, icd_9, icd_10) <span class="sc">|&gt;</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="fu">c</span>(icd_9, icd_10), <span class="at">values_to =</span> <span class="st">&quot;code&quot;</span>, <span class="at">names_to =</span> <span class="st">&quot;version&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(group, classification, version, code) <span class="sc">|&gt;</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(version) <span class="sc">|&gt;</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nest</span>() <span class="sc">|&gt;</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> <span class="fu">map</span>(data, \(x) x <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">explain_table</span>(code)<span class="sc">$</span>long_desc))</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 64 x 5
+# Groups:   version [2]
+   version group  classification code   label                                   
+   &lt;chr&gt;   &lt;chr&gt;  &lt;chr&gt;          &lt;chr&gt;  &lt;chr&gt;                                   
+ 1 icd_10  bulbar speech         F800   Phonological disorder                   
+ 2 icd_10  bulbar speech         F8089  Other developmental disorders of speech~
+ 3 icd_10  bulbar speech         I69920 Aphasia following unspecified cerebrova~
+ 4 icd_10  bulbar speech         I69921 Dysphasia following unspecified cerebro~
+ 5 icd_10  bulbar speech         I69922 Dysarthria following unspecified cerebr~
+ 6 icd_10  bulbar speech         I69923 Fluency disorder following unspecified ~
+ 7 icd_10  bulbar speech         I69928 Other speech and language deficits foll~
+ 8 icd_10  bulbar speech         I69928 Other speech and language deficits foll~
+ 9 icd_10  bulbar speech         I69991 Dysphagia following unspecified cerebro~
+10 icd_10  bulbar speech         R130   Aphagia                                 
+# i 54 more rows</code></pre>
+</div>
+</div>
+<p>And limb or motor symptoms:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>motor_symptoms <span class="sc">|&gt;</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, classification, icd_9, icd_10) <span class="sc">|&gt;</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="fu">c</span>(icd_9, icd_10), <span class="at">values_to =</span> <span class="st">&quot;code&quot;</span>, <span class="at">names_to =</span> <span class="st">&quot;version&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(group, classification, version, code) <span class="sc">|&gt;</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(version) <span class="sc">|&gt;</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nest</span>() <span class="sc">|&gt;</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> <span class="fu">map</span>(data, \(x) x <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">explain_table</span>(code)<span class="sc">$</span>long_desc))</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 116 x 5
+# Groups:   version [2]
+   version group classification code    label                                   
+   &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt;          &lt;chr&gt;   &lt;chr&gt;                                   
+ 1 icd_10  motor falls          W19XXXA Unspecified fall, initial encounter     
+ 2 icd_10  motor falls          Z9181   History of falling                      
+ 3 icd_10  motor gait           R260    Ataxic gait                             
+ 4 icd_10  motor gait           R261    Paralytic gait                          
+ 5 icd_10  motor gait           R262    Difficulty in walking, not elsewhere cl~
+ 6 icd_10  motor gait           R2689   Other abnormalities of gait and mobility
+ 7 icd_10  motor gait           R269    Unspecified abnormalities of gait and m~
+ 8 icd_10  motor gait           R270    Ataxia, unspecified                     
+ 9 icd_10  motor gait           R278    Other lack of coordination              
+10 icd_10  motor gait           R279    Unspecified lack of coordination        
+# i 106 more rows</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>falls <span class="ot">&lt;-</span> unique_by_enrolid <span class="sc">|&gt;</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(dx <span class="sc">%in%</span> <span class="fu">c</span>(falls_9, falls_10)) <span class="sc">|&gt;</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">fall =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, fall) <span class="sc">|&gt;</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>symptoms <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(bulbar_symptoms, motor_symptoms) <span class="sc">|&gt;</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, classification, icd_9, icd_10) <span class="sc">|&gt;</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="fu">c</span>(icd_9, icd_10), <span class="at">values_to =</span> <span class="st">&quot;dx&quot;</span>, <span class="at">names_to =</span> <span class="st">&quot;version&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">icd_version =</span> <span class="fu">ifelse</span>(version <span class="sc">==</span> <span class="st">&quot;icd_10&quot;</span>, <span class="dv">10</span>, <span class="dv">9</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, classification, icd_version, dx)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</section>
-<section id="muscle-symptoms" class="level2">
-<h2 class="anchored" data-anchor-id="muscle-symptoms">Muscle Symptoms</h2>
-<p>Muscle symptoms are coded with:</p>
+<p>And then use this table to annotate the <code>unique_by_enrolid</code> diagnoses:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>muscle_9 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;72885&quot;</span>, <span class="st">&quot;72887&quot;</span>, <span class="st">&quot;7282&quot;</span>)</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>muscle_10 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;M6283&quot;</span>,<span class="st">&quot;M62838&quot;</span>, <span class="st">&quot;M62831&quot;</span>, <span class="st">&quot;M625&quot;</span>, <span class="st">&quot;M6250&quot;</span>, <span class="st">&quot;M6251&quot;</span>, <span class="st">&quot;M62511&quot;</span>, </span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M62512&quot;</span>, <span class="st">&quot;M62519&quot;</span>, <span class="st">&quot;M6252&quot;</span>, <span class="st">&quot;M62521&quot;</span>, <span class="st">&quot;M62522&quot;</span>, <span class="st">&quot;M62529&quot;</span>, </span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M6253&quot;</span>, <span class="st">&quot;M62531&quot;</span>, <span class="st">&quot;M62532&quot;</span>, <span class="st">&quot;M52539&quot;</span>, <span class="st">&quot;M6254&quot;</span>, <span class="st">&quot;M62541&quot;</span>, </span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M62542&quot;</span>, <span class="st">&quot;M62549&quot;</span>, <span class="st">&quot;M6255&quot;</span>, <span class="st">&quot;M62551&quot;</span>, <span class="st">&quot;M62552&quot;</span>, <span class="st">&quot;M62559&quot;</span>, </span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M6256&quot;</span>, <span class="st">&quot;M62561&quot;</span>, <span class="st">&quot;M62562&quot;</span>, <span class="st">&quot;M62569&quot;</span>,<span class="st">&quot;M6257&quot;</span>, <span class="st">&quot;M62571&quot;</span>, </span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M62572&quot;</span>, <span class="st">&quot;M62579&quot;</span>, <span class="st">&quot;M6258&quot;</span>, <span class="st">&quot;M6259&quot;</span>, </span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M6251&quot;</span>, <span class="st">&quot;M6252&quot;</span>, <span class="st">&quot;M6259&quot;</span>, <span class="st">&quot;M6281&quot;</span>, <span class="st">&quot;M6283&quot;</span>, <span class="st">&quot;M62830&quot;</span>, </span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;M62831&quot;</span>, <span class="st">&quot;M62838&quot;</span>)</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(muscle_9) <span class="sc">|&gt;</span></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc),</span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(muscle_10) <span class="sc">|&gt;</span></span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc)</span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
-<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output-display">
-<table class="table table-sm table-striped">
-<colgroup>
-<col style="width: 7%">
-<col style="width: 92%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">code</th>
-<th style="text-align: left;">long_desc</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">72885</td>
-<td style="text-align: left;">Spasm of muscle</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">72887</td>
-<td style="text-align: left;">Muscle weakness (generalized)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">7282</td>
-<td style="text-align: left;">Muscular wasting and disuse atrophy, not elsewhere classified</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M6283</td>
-<td style="text-align: left;">Muscle spasm</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62838</td>
-<td style="text-align: left;">Other muscle spasm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62831</td>
-<td style="text-align: left;">Muscle spasm of calf</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M625</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M6250</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified site</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6251</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, shoulder</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62511</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right shoulder</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62512</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left shoulder</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62519</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified shoulder</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6252</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, upper arm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62521</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right upper arm</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62522</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left upper arm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62529</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified upper arm</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6253</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, forearm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62531</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right forearm</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62532</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left forearm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M52539</td>
-<td style="text-align: left;">NA</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6254</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, hand</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62541</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right hand</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62542</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left hand</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62549</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified hand</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6255</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, thigh</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62551</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right thigh</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62552</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left thigh</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62559</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified thigh</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6256</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, lower leg</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62561</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right lower leg</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62562</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left lower leg</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62569</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified lower leg</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6257</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, ankle and foot</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62571</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, right ankle and foot</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62572</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, left ankle and foot</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62579</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, unspecified ankle and foot</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6258</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, other site</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M6259</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, multiple sites</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6251</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, shoulder</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M6252</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, upper arm</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6259</td>
-<td style="text-align: left;">Muscle wasting and atrophy, not elsewhere classified, multiple sites</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M6281</td>
-<td style="text-align: left;">Muscle weakness (generalized)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M6283</td>
-<td style="text-align: left;">Muscle spasm</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62830</td>
-<td style="text-align: left;">Muscle spasm of back</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">M62831</td>
-<td style="text-align: left;">Muscle spasm of calf</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">M62838</td>
-<td style="text-align: left;">Other muscle spasm</td>
-</tr>
-</tbody>
-</table>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>exposures <span class="ot">&lt;-</span> unique_by_enrolid <span class="sc">|&gt;</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(symptoms, </span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;icd_version&quot;</span>, <span class="st">&quot;dx&quot;</span>),</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">relationship =</span> <span class="st">&quot;many-to-many&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(enrolid, group, classification) <span class="sc">|&gt;</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">first_dx_date =</span> <span class="fu">min</span>(first_dx_date),</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</div>
-<div class="cell">
-<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>muscle <span class="ot">&lt;-</span> unique_by_enrolid <span class="sc">|&gt;</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(dx <span class="sc">%in%</span> <span class="fu">c</span>(muscle_9, muscle_10)) <span class="sc">|&gt;</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">muscle =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, muscle) <span class="sc">|&gt;</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</div>
-</section>
-<section id="oropharyngeal-problems" class="level2">
-<h2 class="anchored" data-anchor-id="oropharyngeal-problems">Oropharyngeal Problems</h2>
-<p>Oropharyngeal problems are coded with:</p>
-<div class="cell">
-<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>speech_9 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;32723&quot;</span>, <span class="st">&quot;78053&quot;</span>, <span class="st">&quot;78057&quot;</span>, <span class="st">&quot;78720&quot;</span>, <span class="st">&quot;78459&quot;</span>, <span class="st">&quot;V573&quot;</span>)</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>speech_10 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;G4733&quot;</span>, <span class="st">&quot;G4730&quot;</span>, <span class="st">&quot;R130&quot;</span>, <span class="st">&quot;R1310&quot;</span>, <span class="st">&quot;R4702&quot;</span>, <span class="st">&quot;R4781&quot;</span>, <span class="st">&quot;R4789&quot;</span>, </span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>               <span class="st">&quot;R479&quot;</span>)</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(speech_9) <span class="sc">|&gt;</span></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc),</span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">explain_table</span>(speech_10) <span class="sc">|&gt;</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(code, long_desc)</span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output-display">
-<table class="table table-sm table-striped">
-<thead>
-<tr class="header">
-<th style="text-align: left;">code</th>
-<th style="text-align: left;">long_desc</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">32723</td>
-<td style="text-align: left;">Obstructive sleep apnea (adult)(pediatric)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">78053</td>
-<td style="text-align: left;">Hypersomnia with sleep apnea, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">78057</td>
-<td style="text-align: left;">Unspecified sleep apnea</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">78720</td>
-<td style="text-align: left;">Dysphagia, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">78459</td>
-<td style="text-align: left;">Other speech disturbance</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">V573</td>
-<td style="text-align: left;">Care involving speech-language therapy</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">G4733</td>
-<td style="text-align: left;">Obstructive sleep apnea (adult) (pediatric)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">G4730</td>
-<td style="text-align: left;">Sleep apnea, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R130</td>
-<td style="text-align: left;">Aphagia</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R1310</td>
-<td style="text-align: left;">Dysphagia, unspecified</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R4702</td>
-<td style="text-align: left;">Dysphasia</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R4781</td>
-<td style="text-align: left;">Slurred speech</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">R4789</td>
-<td style="text-align: left;">Other speech disturbances</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">R479</td>
-<td style="text-align: left;">Unspecified speech disturbances</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-<div class="cell">
-<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>op <span class="ot">&lt;-</span> unique_by_enrolid <span class="sc">|&gt;</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(dx <span class="sc">%in%</span> <span class="fu">c</span>(speech_9, speech_10)) <span class="sc">|&gt;</span></span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">op =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, op) <span class="sc">|&gt;</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</div>
-</section>
 </section>
 <section id="find-urbanrural" class="level1">
 <h1>Find Urban/Rural</h1>
 <p>Urban is defined as having ever lived in an MSA. Query the detailed enrollment tables to find out:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>check_msa <span class="ot">&lt;-</span> <span class="cf">function</span>(args, required_enrolid) {</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  source <span class="ot">&lt;-</span> args[[<span class="dv">1</span>]]</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  year <span class="ot">&lt;-</span> args[[<span class="dv">2</span>]]</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  db <span class="ot">&lt;-</span> DBI<span class="sc">::</span><span class="fu">dbConnect</span>(RSQLite<span class="sc">::</span><span class="fu">SQLite</span>(),</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>                       glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">&quot;/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db&quot;</span>))</span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  enrollment_msa <span class="ot">&lt;-</span> <span class="fu">tbl</span>(db, glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">&quot;enrollment_detail_{source}_{year}&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(enrolid <span class="sc">%in%</span> required_enrolid) <span class="sc">|&gt;</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, msa) <span class="sc">|&gt;</span></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)) <span class="sc">|&gt;</span></span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>()</span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>  enrollment_msa <span class="ot">&lt;-</span> enrollment_msa <span class="sc">|&gt;</span></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">lives_in_msa =</span> <span class="sc">!</span><span class="fu">is.na</span>(msa) <span class="sc">&amp;</span> msa <span class="sc">!=</span> <span class="dv">0</span> <span class="sc">&amp;</span> msa <span class="sc">!=</span> <span class="st">&quot;&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(enrolid) <span class="sc">|&gt;</span> </span>
-<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarize</span>(<span class="at">lives_in_msa =</span> <span class="fu">any</span>(lives_in_msa))</span>
-<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(enrollment_msa)</span>
-<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>check_msa <span class="ot">&lt;-</span> <span class="cf">function</span>(args, required_enrolid) {</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  source <span class="ot">&lt;-</span> args[[<span class="dv">1</span>]]</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  year <span class="ot">&lt;-</span> args[[<span class="dv">2</span>]]</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  db <span class="ot">&lt;-</span> DBI<span class="sc">::</span><span class="fu">dbConnect</span>(RSQLite<span class="sc">::</span><span class="fu">SQLite</span>(),</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>                       glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">&quot;/Shared/Statepi_Marketscan/databases/Truven/truven_{year}.db&quot;</span>))</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  enrollment_msa <span class="ot">&lt;-</span> <span class="fu">tbl</span>(db, glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">&quot;enrollment_detail_{source}_{year}&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(enrolid <span class="sc">%in%</span> required_enrolid) <span class="sc">|&gt;</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, msa) <span class="sc">|&gt;</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)) <span class="sc">|&gt;</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>()</span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>  enrollment_msa <span class="ot">&lt;-</span> enrollment_msa <span class="sc">|&gt;</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">lives_in_msa =</span> <span class="sc">!</span><span class="fu">is.na</span>(msa) <span class="sc">&amp;</span> msa <span class="sc">!=</span> <span class="dv">0</span> <span class="sc">&amp;</span> msa <span class="sc">!=</span> <span class="st">&quot;&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(enrolid) <span class="sc">|&gt;</span> </span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarize</span>(<span class="at">lives_in_msa =</span> <span class="fu">any</span>(lives_in_msa))</span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(enrollment_msa)</span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>And then apply:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>resides_in_msa <span class="ot">&lt;-</span> <span class="fu">parLapplyLB</span>(cluster,</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>                              conditions_inpatient_only,</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>                              check_msa,</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>                              <span class="at">required_enrolid =</span> cohort<span class="sc">$</span>enrolid)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>resides_in_msa <span class="ot">&lt;-</span> <span class="fu">parLapplyLB</span>(cluster,</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>                              conditions_inpatient_only,</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>                              check_msa,</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>                              <span class="at">required_enrolid =</span> cohort<span class="sc">$</span>enrolid)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>And then aggregate across years:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>resides_in_msa <span class="ot">&lt;-</span> resides_in_msa <span class="sc">|&gt;</span> </span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>() <span class="sc">|&gt;</span></span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(enrolid) <span class="sc">|&gt;</span></span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">lives_in_msa =</span> <span class="fu">any</span>(lives_in_msa)</span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>resides_in_msa <span class="ot">&lt;-</span> resides_in_msa <span class="sc">|&gt;</span> </span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>() <span class="sc">|&gt;</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(enrolid) <span class="sc">|&gt;</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">lives_in_msa =</span> <span class="fu">any</span>(lives_in_msa)</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="assemble-model-data-set" class="level1">
 <h1>Assemble Model Data Set</h1>
 <p>In order to normalize volume, we need enrollment duration in days:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>enrollment_db <span class="ot">&lt;-</span> DBI<span class="sc">::</span><span class="fu">dbConnect</span>(</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  RSQLite<span class="sc">::</span><span class="fu">SQLite</span>(), </span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;/Shared/Statepi_Marketscan/databases/Truven/enrollment_dbs/all_enroll_01_21q4.db&quot;</span>)</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>enrollments <span class="ot">&lt;-</span> <span class="fu">tbl</span>(enrollment_db, <span class="st">&quot;all_enrollees&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(enrolid <span class="sc">%in%</span> <span class="fu">local</span>(cohort<span class="sc">$</span>enrolid)) <span class="sc">|&gt;</span></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>enrollment_db <span class="ot">&lt;-</span> DBI<span class="sc">::</span><span class="fu">dbConnect</span>(</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>  RSQLite<span class="sc">::</span><span class="fu">SQLite</span>(), </span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;/Shared/Statepi_Marketscan/databases/Truven/enrollment_dbs/all_enroll_01_21q4.db&quot;</span>)</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>enrollments <span class="ot">&lt;-</span> <span class="fu">tbl</span>(enrollment_db, <span class="st">&quot;all_enrollees&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(enrolid <span class="sc">%in%</span> <span class="fu">local</span>(cohort<span class="sc">$</span>enrolid)) <span class="sc">|&gt;</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>For people who have ALS, replace last date and calculate enrollment duration:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>enrollment_duration <span class="ot">&lt;-</span> enrollments <span class="sc">|&gt;</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)) <span class="sc">|&gt;</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">|&gt;</span> <span class="fu">select</span>(enrolid, als_date), <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_date =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(als_date), last_date,</span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>                      <span class="fu">ifelse</span>(als_date <span class="sc">&lt;</span> last_date, als_date, last_date))</span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">duration =</span> end_date <span class="sc">-</span> first_date) <span class="sc">|&gt;</span></span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, duration)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>enrollment_duration <span class="ot">&lt;-</span> enrollments <span class="sc">|&gt;</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)) <span class="sc">|&gt;</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">|&gt;</span> <span class="fu">select</span>(enrolid, als_date), <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_date =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(als_date), last_date,</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>                      <span class="fu">ifelse</span>(als_date <span class="sc">&lt;</span> last_date, als_date, last_date))</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">duration =</span> end_date <span class="sc">-</span> first_date) <span class="sc">|&gt;</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, duration)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Then make normalized volume:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>volume <span class="ot">&lt;-</span> <span class="fu">full_join</span>(</span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>  outpatient_volume <span class="sc">|&gt;</span></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(enrollment_duration, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>      <span class="at">rate_outpatient_visits =</span> n_outpatient_visits <span class="sc">/</span> duration <span class="sc">*</span> <span class="dv">365</span>,</span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>      <span class="at">intensity_outpatient_visits_dx =</span> mean_dx_per_outpatient_visit</span>
-<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
-<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, rate_outpatient_visits, intensity_outpatient_visits_dx),</span>
-<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>  inpatient_volume <span class="sc">|&gt;</span></span>
-<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(enrollment_duration, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
-<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">rate_inpatient_stays =</span> n_hospital_admissions <span class="sc">/</span> duration <span class="sc">*</span> <span class="dv">365</span>,</span>
-<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">intensity_inpatient_stays_los =</span> n_hospital_days <span class="sc">/</span> n_hospital_admissions</span>
-<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
-<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, rate_inpatient_stays, intensity_inpatient_stays_los),</span>
-<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
-<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>volume <span class="ot">&lt;-</span> <span class="fu">full_join</span>(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  outpatient_volume <span class="sc">|&gt;</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(enrollment_duration, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>      <span class="at">rate_outpatient_visits =</span> n_outpatient_visits <span class="sc">/</span> duration <span class="sc">*</span> <span class="dv">365</span>,</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>      <span class="at">intensity_outpatient_visits_dx =</span> mean_dx_per_outpatient_visit</span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, rate_outpatient_visits, intensity_outpatient_visits_dx),</span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>  inpatient_volume <span class="sc">|&gt;</span></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(enrollment_duration, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">rate_inpatient_stays =</span> n_hospital_admissions <span class="sc">/</span> duration <span class="sc">*</span> <span class="dv">365</span>,</span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">intensity_inpatient_stays_los =</span> n_hospital_days <span class="sc">/</span> n_hospital_admissions</span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(enrolid, rate_inpatient_stays, intensity_inpatient_stays_los),</span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
+<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>And then add to the cohort data:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> cohort <span class="sc">|&gt;</span></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, als, first_year, last_year, dobyr, sex) <span class="sc">|&gt;</span></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(volume, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">rate_outpatient_visits =</span> <span class="fu">replace_na</span>(rate_outpatient_visits, <span class="dv">0</span>),</span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity_outpatient_visits_dx =</span> <span class="fu">replace_na</span>(intensity_outpatient_visits_dx, <span class="dv">0</span>),</span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">rate_inpatient_stays =</span> <span class="fu">replace_na</span>(rate_inpatient_stays, <span class="dv">0</span>),</span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity_inpatient_stays_los =</span> <span class="fu">replace_na</span>(intensity_inpatient_stays_los, <span class="dv">0</span>)</span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> cohort <span class="sc">|&gt;</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, als, first_year, last_year, dobyr, sex) <span class="sc">|&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(volume, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">rate_outpatient_visits =</span> <span class="fu">replace_na</span>(rate_outpatient_visits, <span class="dv">0</span>),</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity_outpatient_visits_dx =</span> <span class="fu">replace_na</span>(intensity_outpatient_visits_dx, <span class="dv">0</span>),</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">rate_inpatient_stays =</span> <span class="fu">replace_na</span>(rate_inpatient_stays, <span class="dv">0</span>),</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity_inpatient_stays_los =</span> <span class="fu">replace_na</span>(intensity_inpatient_stays_los, <span class="dv">0</span>)</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>And the Elixhauser flags:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(elix, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(</span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">starts_with</span>(<span class="st">&quot;elix&quot;</span>),</span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>      \(x) <span class="fu">replace_na</span>(x, <span class="cn">FALSE</span>)</span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(elix, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(</span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">starts_with</span>(<span class="st">&quot;elix&quot;</span>),</span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>      \(x) <span class="fu">replace_na</span>(x, <span class="cn">FALSE</span>)</span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<p>Add the exposures:</p>
+<p>Add the exposures. First, the major classes:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    falls,</span>
-<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
-<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>    muscle,</span>
-<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
-<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>    op,</span>
-<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
-<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(</span>
-<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>    resides_in_msa,</span>
-<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
-<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">fall =</span> <span class="fu">replace_na</span>(fall, <span class="cn">FALSE</span>),</span>
-<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">muscle =</span> <span class="fu">replace_na</span>(muscle, <span class="cn">FALSE</span>),</span>
-<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">op =</span> <span class="fu">replace_na</span>(op, <span class="cn">FALSE</span>)</span>
-<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>    exposures <span class="sc">|&gt;</span> </span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(enrolid, group) <span class="sc">|&gt;</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">distinct</span>() <span class="sc">|&gt;</span></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(<span class="at">value =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> group, <span class="at">values_from =</span> value),</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>And then the sub-classifications:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    exposures <span class="sc">|&gt;</span> </span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(enrolid, classification) <span class="sc">|&gt;</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">distinct</span>() <span class="sc">|&gt;</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(<span class="at">value =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> classification, <span class="at">values_from =</span> value),</span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>And then add the exposure dates</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>first_exposure_date <span class="ot">&lt;-</span> exposures <span class="sc">|&gt;</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(enrolid) <span class="sc">|&gt;</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">first_symptom_date =</span> <span class="fu">min</span>(first_dx_date))</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(first_exposure_date, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>And add end dates (ALS diagnosis or data exit, whichever comes first):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>end_dates <span class="ot">&lt;-</span> enrollments <span class="sc">|&gt;</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)) <span class="sc">|&gt;</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(als_dates, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_date =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(als_date), last_date, als_date)</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(enrolid, end_date)</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(model_data, end_dates, <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span>)</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>  model_data, </span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>  enrollments <span class="sc">|&gt;</span> <span class="fu">select</span>(enrolid, first_date) <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">enrolid =</span> <span class="fu">as.character</span>(enrolid)), </span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">by =</span> <span class="st">&quot;enrolid&quot;</span></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>And then addressing the implicit <code>FALSE</code> values:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>model_data <span class="ot">&lt;-</span> model_data <span class="sc">|&gt;</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">motor =</span> <span class="fu">replace_na</span>(motor, <span class="cn">FALSE</span>),</span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">bulbar =</span> <span class="fu">replace_na</span>(bulbar, <span class="cn">FALSE</span>),</span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">speech =</span> <span class="fu">replace_na</span>(speech, <span class="cn">FALSE</span>),</span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">swallowing =</span> <span class="fu">replace_na</span>(swallowing, <span class="cn">FALSE</span>),</span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">strength =</span> <span class="fu">replace_na</span>(strength, <span class="cn">FALSE</span>),</span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">gait =</span> <span class="fu">replace_na</span>(gait, <span class="cn">FALSE</span>),</span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">involuntary_movement =</span> <span class="fu">replace_na</span>(involuntary_movement, <span class="cn">FALSE</span>),</span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">pain =</span> <span class="fu">replace_na</span>(pain, <span class="cn">FALSE</span>),</span>
+<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">other =</span> <span class="fu">replace_na</span>(other, <span class="cn">FALSE</span>),</span>
+<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">falls =</span> <span class="fu">replace_na</span>(falls, <span class="cn">FALSE</span>)</span>
+<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="save-model-data" class="level1">
 <h1>Save Model Data</h1>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_rds</span>(model_data, <span class="st">&quot;/Shared/lss_jsimmeri/als/model_data.rds&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_rds</span>(model_data, <span class="st">&quot;/Shared/lss_jsimmeri/als/model_data.rds&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="session-information" class="level1">
 <h1>Session Information</h1>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>R version 4.1.3 (2022-03-10)
 Platform: x86_64-pc-linux-gnu (64-bit)
@@ -3957,18 +3589,18 @@ other attached packages:
  [9] tibble_3.2.1    ggplot2_3.4.2   tidyverse_2.0.0
 
 loaded via a namespace (and not attached):
- [1] Rcpp_1.0.10       dbplyr_2.3.3      highr_0.9         pillar_1.9.0     
- [5] compiler_4.1.3    tools_4.1.3       bit_4.0.4         digest_0.6.29    
- [9] memoise_2.0.1     RSQLite_2.2.18    timechange_0.1.1  jsonlite_1.8.4   
-[13] evaluate_0.16     lifecycle_1.0.3   gtable_0.3.1      pkgconfig_2.0.3  
-[17] rlang_1.1.0       DBI_1.1.3         cli_3.6.1         yaml_2.3.5       
-[21] xfun_0.32         fastmap_1.1.0     withr_2.5.0       knitr_1.40       
-[25] generics_0.1.3    vctrs_0.6.2       htmlwidgets_1.5.4 hms_1.1.2        
-[29] bit64_4.0.5       grid_4.1.3        tidyselect_1.2.0  glue_1.6.2       
-[33] R6_2.5.1          fansi_1.0.4       rmarkdown_2.16    blob_1.2.3       
-[37] tzdb_0.3.0        magrittr_2.0.3    ellipsis_0.3.2    scales_1.2.1     
-[41] htmltools_0.5.3   colorspace_2.0-3  utf8_1.2.3        stringi_1.7.12   
-[45] munsell_0.5.0     cachem_1.0.6     </code></pre>
+ [1] tidyselect_1.2.0  xfun_0.32         colorspace_2.0-3  vctrs_0.6.2      
+ [5] generics_0.1.3    htmltools_0.5.3   yaml_2.3.5        utf8_1.2.3       
+ [9] blob_1.2.3        rlang_1.1.0       pillar_1.9.0      glue_1.6.2       
+[13] withr_2.5.0       DBI_1.1.3         bit64_4.0.5       dbplyr_2.3.3     
+[17] lifecycle_1.0.3   munsell_0.5.0     gtable_0.3.1      htmlwidgets_1.5.4
+[21] evaluate_0.16     memoise_2.0.1     knitr_1.40        tzdb_0.3.0       
+[25] fastmap_1.1.0     curl_5.0.0        fansi_1.0.4       Rcpp_1.0.10      
+[29] scales_1.2.1      cachem_1.0.6      vroom_1.6.3       jsonlite_1.8.4   
+[33] bit_4.0.4         hms_1.1.2         digest_0.6.29     stringi_1.7.12   
+[37] grid_4.1.3        cli_3.6.1         tools_4.1.3       magrittr_2.0.3   
+[41] RSQLite_2.2.18    crayon_1.5.1      pkgconfig_2.0.3   ellipsis_0.3.2   
+[45] timechange_0.1.1  rmarkdown_2.16    R6_2.5.1          compiler_4.1.3   </code></pre>
 </div>
 </div>
 </section>
