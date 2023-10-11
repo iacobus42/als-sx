@@ -10,6 +10,7 @@ format:
 library(tidyverse)
 library(survival)
 library(tableone)
+library(gtsummary)
 ```
 
 # Data Loading and Processing
@@ -276,7 +277,6 @@ strata accounts for these factors while also properly clustering the errors.
 Without adjustment:
 
 ```{r}
-library(gtsummary)
 clogit(
   any_fml_unadj,
   model_data
@@ -693,7 +693,9 @@ list(
   facet_grid(rows = vars(variable), scale = "free_y") +
   geom_hline(yintercept = 1, linetype = 2) +
   labs(x = "", y = "Odds Ratio\n(95% CI)") +
-  theme_bw()
+  theme_bw() + 
+  scale_y_log10()
+ggsave("~/projects/als-sx/fig_1.svg", width = 8, height = 8)
 ```
 
 ### Number of Symptoms
@@ -734,4 +736,179 @@ n_symptoms_adjusted |>
   geom_linerange() + 
   labs(x = "Number of Symptoms", y = "ORs Compared to Having No Symptoms\n(95% CI)") + 
   theme_bw()
+```
+
+## Excluding Recent "Exposures"
+Require the exposure to have occurred at least $i$ days before the ALS diagnosis
+or data exit date where $i$ ranges from 0 days to 5 years. 
+
+Since this difference is only defined for people who had a symptom, retain any
+people who are symptom free if they're possibly still included in the data 
+(e.g., if the time between the enrollment date and the end date is less than 
+$i$ days). 
+
+First, a couple specific models:
+
+```{r}
+delay_30 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 30))) |>
+    filter(first_date < (end_date - 30)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+delay_60 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 60))) |>
+    filter(first_date < (end_date - 60)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+delay_90 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 90))) |>
+    filter(first_date < (end_date - 90)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+delay_180 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 180))) |>
+    filter(first_date < (end_date - 180)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+delay_270 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 270))) |>
+    filter(first_date < (end_date - 270)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+delay_365 <- clogit(
+  any_fml_fulladj,
+  model_data |>
+    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 365))) |>
+    filter(first_date < (end_date - 365)) |>
+    mutate(
+      across(
+        is_logical,
+        as.numeric
+      )
+    )
+  )
+
+glance_vars <- c("nobs","nevent", "concordance", "r.squared")
+tbl_merge(
+  tbls = list(
+    tbl_regression(delay_30, exponentiate = TRUE) |> add_glance_table(glance_vars),
+    tbl_regression(delay_60, exponentiate = TRUE) |> add_glance_table(glance_vars),
+    tbl_regression(delay_90, exponentiate = TRUE) |> add_glance_table(glance_vars),
+    tbl_regression(delay_180, exponentiate = TRUE) |> add_glance_table(glance_vars),
+    tbl_regression(delay_270, exponentiate = TRUE) |> add_glance_table(glance_vars),
+    tbl_regression(delay_365, exponentiate = TRUE) |> add_glance_table(glance_vars)
+  ),
+  tab_spanner = c("**30 Day Delay**", "**60 Day Delay**", "**90 Day Delay**", 
+                  "**180 Day Delay**", "**270 Day Delay**", "**365 Day Delay**")
+)
+```
+
+And then with all the lags up to 5 years:
+
+```{r}
+lags <- round(seq(0, 2, by = 1/12) * 365)
+results <- vector("list", length(lags))
+j <- 1
+p <- progress::progress_bar$new(
+  total = length(lags), 
+  format = "[:bar] :percent in :elapsed with :eta remaining"
+)
+for (i in lags) {
+  results[[j]] <- clogit(
+    any_fml_fulladj,
+    model_data |>
+      filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - i))) |>
+      filter(first_date < (end_date - i))
+    ) |> 
+      broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+      mutate(i = i) |>
+      select(i, term, estimate, conf.low, conf.high)
+    j <- j + 1
+    p$tick()
+}
+
+results |>
+  bind_rows() |> 
+  filter(
+    stringr::str_detect(term, "Neuro")
+  ) |>
+  ggplot(aes(x = i / 365, 
+             y = estimate,
+             ymin = conf.low,
+             ymax = conf.high)) + 
+  geom_point() +
+  geom_linerange() + 
+  labs(x = "Lead-in Period by Years",
+       y = "Odds Ratio for Elixhauser Neurological CMs") + 
+  theme_bw()
+ggsave("~/projects/als-sx/neuro_series.svg", width = 16/2, height = 9/2)
+
+results |>
+  bind_rows() |> 
+  filter(
+    stringr::str_detect(term, "sx") | stringr::str_detect(term, "msa")
+  ) |>
+  mutate(
+    term = case_when(
+      term == "any_sxTRUE" ~ "Has Symptom",
+      term == "lives_in_msaTRUE" ~ "Lives in MSA",
+      term == "any_sxTRUE:lives_in_msaTRUE" ~ "Symptom x MSA"
+    ),
+    term = forcats::fct_relevel(term,
+      "Has Symptom", "Lives in MSA")
+  ) |>
+  ggplot(
+    aes(
+      x = i / 365,
+      y = estimate,
+      ymin = conf.low,
+      ymax = conf.high
+    )
+  ) + 
+  geom_point() + 
+  geom_linerange() + 
+  facet_grid(rows = vars(term), scales = "free_y") + 
+  labs(x = "Years Between Symptom and ALS Date", y = "Odds Ratio") +
+  theme_bw()
+ggsave("~/projects/als-sx/symptom_series.svg", width = 16/2, height = 9/2)
 ```

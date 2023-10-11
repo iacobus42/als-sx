@@ -247,8 +247,9 @@ And also the set of unique diagnoses recorded during the period:
 
 ```{r}
 unique_by_enrolid <- dx_tbl |>
-  select(enrolid, icd_version, dx) |>
-  distinct()
+  group_by(enrolid, icd_version, dx) |>
+  summarize(first_dx_date = min(date),
+            .groups = "drop")
 ```
 
 # Calculate Comorbidity Flags
@@ -466,8 +467,9 @@ exposures <- unique_by_enrolid |>
   inner_join(symptoms, 
              by = c("icd_version", "dx"),
              relationship = "many-to-many") |>
-  select(enrolid, group, classification) |>
-  distinct()
+  group_by(enrolid, group, classification) |>
+  summarize(first_dx_date = min(first_dx_date),
+            .groups = "drop")
 ```
 
 # Find Urban/Rural
@@ -613,6 +615,36 @@ model_data <- model_data |>
       mutate(value = TRUE) |>
       pivot_wider(names_from = classification, values_from = value),
     by = "enrolid")
+```
+
+And then add the exposure dates
+
+```{r}
+first_exposure_date <- exposures |>
+  group_by(enrolid) |>
+  summarize(first_symptom_date = min(first_dx_date))
+
+model_data <- model_data |>
+  left_join(first_exposure_date, by = "enrolid")
+```
+
+And add end dates (ALS diagnosis or data exit, whichever comes first):
+
+```{r}
+end_dates <- enrollments |>
+  mutate(enrolid = as.character(enrolid)) |>
+  left_join(als_dates, by = "enrolid") |>
+  mutate(
+    end_date = ifelse(is.na(als_date), last_date, als_date)
+  ) |>
+  select(enrolid, end_date)
+model_data <- inner_join(model_data, end_dates, by = "enrolid")
+
+model_data <- inner_join(
+  model_data, 
+  enrollments |> select(enrolid, first_date) |> mutate(enrolid = as.character(enrolid)), 
+  by = "enrolid"
+)
 ```
 
 And then addressing the implicit `FALSE` values:

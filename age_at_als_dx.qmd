@@ -113,12 +113,19 @@ And there is a dose response pattern:
 
 ```{r}
 survfit(
-  Surv(age, als) ~ n_total,
-  data = model_data
+  Surv(age, als) ~ n_total_topcoded,
+  data = model_data |>
+    mutate(
+      n_total_topcoded = case_when(
+        n_total <= 4 ~ as.character(n_total),
+        n_total > 4 ~ "5+"
+      )
+    )
 ) |> 
   broom::tidy() |>
   mutate(
-    strata = stringr::str_extract(strata, "[0-8]")
+    strata = stringr::str_extract(strata, "[0-8]"),
+    strata = ifelse(strata == "5", glue::glue("{strata}+"), strata)
   ) |>
   ggplot(
     aes(x = time, y = estimate, 
@@ -138,13 +145,49 @@ coxph(
   Surv(age, als) ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
                    rate_inpatient_stays + intensity_inpatient_stays_los +
                    elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
-                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + elix_Pulmonary + elix_DM +
-                   elix_DMcx + elix_Hypothyroid + elix_Renal + elix_Liver + elix_PUD + 
-                   elix_HIV + elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
-                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + elix_FluidsLytes + elix_BloodLoss + 
-                   elix_Anemia + elix_Alcohol + elix_Drugs + elix_Psychoses +
-                   elix_Depression + as.factor(any_sx) * lives_in_msa + strata(stratum),
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + 
+                   elix_Pulmonary + elix_DM + elix_DMcx + elix_Hypothyroid + 
+                   elix_Renal + elix_Liver + elix_PUD + elix_HIV + 
+                   elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + 
+                   elix_FluidsLytes + elix_BloodLoss + elix_Anemia + 
+                   elix_Alcohol + elix_Drugs + elix_Psychoses + 
+                   elix_Depression + 
+                   as.factor(any_sx) * lives_in_msa + 
+                   strata(stratum),
   data = model_data,
+  robust = TRUE,
+  cluster = stratum
+) |> 
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
+  knitr::kable(digits = 2)
+```
+
+And the dose-response:
+
+```{r}
+coxph(
+  Surv(age, als) ~ rate_outpatient_visits + intensity_outpatient_visits_dx + 
+                   rate_inpatient_stays + intensity_inpatient_stays_los +
+                   elix_CHF + elix_Valvular + elix_PHTN + elix_PVD + elix_HTN +
+                   elix_HTNcx + elix_Paralysis + elix_NeuroOther + 
+                   elix_Pulmonary + elix_DM + elix_DMcx + elix_Hypothyroid + 
+                   elix_Renal + elix_Liver + elix_PUD + elix_HIV + 
+                   elix_Lymphoma + elix_Mets + elix_Tumor + elix_Rheumatic + 
+                   elix_Coagulopathy + elix_Obesity + elix_WeightLoss + 
+                   elix_FluidsLytes + elix_BloodLoss + elix_Anemia + 
+                   elix_Alcohol + elix_Drugs + elix_Psychoses + 
+                   elix_Depression + 
+                   as.factor(n_total_topcoded) * lives_in_msa + 
+                   strata(stratum),
+  data = model_data |>
+      mutate(
+        n_total_topcoded = case_when(
+          n_total <= 4 ~ as.character(n_total),
+          n_total > 4 ~ "5+"
+        )
+    ),
   robust = TRUE,
   cluster = stratum
 ) |> 
