@@ -647,6 +647,13 @@ model_data <- inner_join(
 )
 ```
 
+Whether or not they live in an MSA:
+
+```{r}
+model_data <- model_data |>
+  left_join(resides_in_msa, by = "enrolid")
+```
+
 And then addressing the implicit `FALSE` values:
 
 ```{r}
@@ -661,7 +668,8 @@ model_data <- model_data |>
     involuntary_movement = replace_na(involuntary_movement, FALSE),
     pain = replace_na(pain, FALSE),
     other = replace_na(other, FALSE),
-    falls = replace_na(falls, FALSE)
+    falls = replace_na(falls, FALSE),
+    lives_in_msa = replace_na(lives_in_msa, FALSE)
   )
 ```
 
