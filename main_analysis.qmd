@@ -802,19 +802,6 @@ delay_180 <- clogit(
     )
   )
 
-delay_270 <- clogit(
-  any_fml_fulladj,
-  model_data |>
-    filter(is.na(first_symptom_date) | (first_symptom_date < (end_date - 270))) |>
-    filter(first_date < (end_date - 270)) |>
-    mutate(
-      across(
-        is_logical,
-        as.numeric
-      )
-    )
-  )
-
 delay_365 <- clogit(
   any_fml_fulladj,
   model_data |>
@@ -835,12 +822,12 @@ tbl_merge(
     tbl_regression(delay_60, exponentiate = TRUE) |> add_glance_table(glance_vars),
     tbl_regression(delay_90, exponentiate = TRUE) |> add_glance_table(glance_vars),
     tbl_regression(delay_180, exponentiate = TRUE) |> add_glance_table(glance_vars),
-    tbl_regression(delay_270, exponentiate = TRUE) |> add_glance_table(glance_vars),
     tbl_regression(delay_365, exponentiate = TRUE) |> add_glance_table(glance_vars)
   ),
   tab_spanner = c("**30 Day Delay**", "**60 Day Delay**", "**90 Day Delay**", 
-                  "**180 Day Delay**", "**270 Day Delay**", "**365 Day Delay**")
-)
+                  "**180 Day Delay**", "**365 Day Delay**")
+) |>
+  modify_column_hide(columns = c(p.value_1, p.value_2, p.value_3, p.value_4))
 ```
 
 And then with all the lags up to 5 years:
