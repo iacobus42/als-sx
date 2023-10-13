@@ -11,6 +11,7 @@ format:
 library(tidyverse)
 library(survival)
 library(patchwork)
+library(viridis)
 ```
 
 Living in an MSA seeks to be consistently associated with lower negative effects
@@ -42,7 +43,7 @@ model_data <- model_data |>
 Living in an MSA is associated with an younger age at diagnosis:
 
 ```{r}
-survfit(
+panel_a <- survfit(
   Surv(age, als) ~ lives_in_msa,
   data = model_data
 ) |>
@@ -56,16 +57,16 @@ survfit(
         color = forcats::fct_rev(strata), fill = forcats::fct_rev(strata))
   ) +
   geom_step() + 
-  geom_ribbon(alpha = 0.25, linetype = 0) + 
   theme_minimal() +
   labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
   theme(legend.position = c(0.25, 0.25))
+panel_a
 ```
 
 Likewise, having symptoms lowers age:
 
 ```{r}
-survfit(
+panel_b <- survfit(
   Surv(age, als) ~ any_sx,
   data = model_data
 ) |>
@@ -79,16 +80,16 @@ survfit(
         color = forcats::fct_rev(strata), fill = forcats::fct_rev(strata))
   ) +
   geom_step() + 
-  geom_ribbon(alpha = 0.25, linetype = 0) +
   theme_minimal() +
   labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
   theme(legend.position = c(0.25, 0.25))
+panel_b
 ```
 
 Which is interactive between MSA and symptoms:
 
 ```{r}
-survfit(
+panel_d <- survfit(
   Surv(age, als) ~ any_sx + lives_in_msa,
   data = model_data
 ) |>
@@ -103,16 +104,16 @@ survfit(
         color = sx, fill = sx, linetype = msa, group = paste0(sx, msa))
   ) + 
   geom_step() + 
-  geom_ribbon(alpha = 0.25, linetype = 0) +
   theme_minimal() +
   labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
   theme(legend.position = c(0.25, 0.25))
+panel_d
 ```
 
 And there is a dose response pattern:
 
 ```{r}
-survfit(
+panel_c <- survfit(
   Surv(age, als) ~ n_total_topcoded,
   data = model_data |>
     mutate(
@@ -136,6 +137,15 @@ survfit(
   theme_minimal() +
   labs(x = "Age in Years", y = "ALS-Free Survival", color = "", fill = "") +
   theme(legend.position = c(0.25, 0.25))
+panel_c
+```
+
+As a single graph:
+
+```{r}
+(panel_a | panel_b) / (panel_c | panel_d) + 
+  plot_annotation(tag_levels = c("A", "B", "C", "D"))
+ggsave("~/projects/als-sx/surv_fig.svg", width = 8, height = 8)
 ```
 
 Testing whether these are multiplicative/addictive or have overlap:
