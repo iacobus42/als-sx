@@ -31,6 +31,5 @@ analyses.
 age-at-diagnosis survival analyses.
 
 # Links and references
-* The pre-print can be found on [medRxiv]()
-* Hosted versions of the HMTL can be found [here](https://www.jacobsimmering.com)
-
+* The pre-print can be found on [medRxiv](https://www.medrxiv.org/content/10.1101/2023.10.13.23297024v1)
+* Hosted versions of the HMTL can be found [here](https://jacobsimmering.com/publication/simmering-2023-als-sx/code)
